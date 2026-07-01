@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sipariş Takip</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1E2124">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Sipariş Takip">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --shell:#1E2124;
+    --shell-2:#2A2E33;
+    --paper:#F3F1EC;
+    --panel:#FFFFFF;
+    --ink:#22262B;
+    --muted:#6B7280;
+    --line:#E3E0D8;
+    --amber:#C9862C;
+    --amber-dark:#A66A1E;
+    --green:#4C7A52;
+    --green-bg:#EAF1EA;
+    --red:#B3452F;
+    --red-bg:#F7EAE6;
+    --wood-1:#C9862C;
+    --wood-2:#8A5A2B;
+    --wood-3:#D9B98A;
+    --wood-4:#5B3A22;
+    --wood-5:#E8D2A6;
+    --radius:10px;
+    --shadow:0 1px 2px rgba(20,20,20,.06), 0 4px 14px rgba(20,20,20,.05);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--paper);color:var(--ink);font-family:'Inter',system-ui,sans-serif;}
+  #app{min-height:100vh;}
+  h1,h2,h3{font-family:'Space Grotesk',system-ui,sans-serif;margin:0;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  button{font-family:inherit;cursor:pointer;}
+  input,select,textarea{font-family:inherit;}
+
+  .veneer{height:6px;width:100%;background:repeating-linear-gradient(90deg,var(--wood-1) 0 40px, var(--wood-2) 40px 44px,var(--wood-4) 44px 84px, var(--wood-3) 84px 88px,var(--wood-5) 88px 128px, var(--wood-2) 128px 132px);opacity:.9;}
+
+  .gate{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--shell);gap:20px;padding:24px;}
+  .gate-logo{color:var(--wood-3);letter-spacing:.06em;text-transform:uppercase;font-size:13px;font-weight:600;}
+  .gate-title{color:#fff;font-size:32px;font-weight:700;text-align:center;}
+  .gate-sub{color:#9aa0a6;font-size:14px;max-width:420px;text-align:center;line-height:1.5;margin-bottom:8px;}
+  .auth-card{width:340px;background:var(--shell-2);border:1px solid #3a3f45;border-radius:var(--radius);padding:26px;color:#fff;}
+  .auth-tabs{display:flex;gap:4px;margin-bottom:18px;background:#1c1f22;border-radius:8px;padding:3px;}
+  .auth-tab{flex:1;text-align:center;padding:8px;border-radius:6px;font-size:13px;color:#9aa0a6;}
+  .auth-tab.active{background:var(--amber);color:#1c1f22;font-weight:600;}
+  .auth-field{margin-bottom:12px;display:flex;flex-direction:column;gap:5px;}
+  .auth-field label{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#9aa0a6;}
+  .auth-field input,.auth-field select{padding:10px 12px;border-radius:7px;border:1px solid #4a4f55;background:#1c1f22;color:#fff;font-size:14px;}
+  .auth-field input:focus,.auth-field select:focus{outline:2px solid var(--amber);}
+  .auth-submit{width:100%;padding:11px;border-radius:8px;border:none;background:var(--amber);color:#1c1f22;font-weight:700;font-size:14px;margin-top:6px;}
+  .auth-submit:hover{background:#dd9a3b;}
+  .auth-submit:disabled{opacity:.6;}
+  .auth-error{color:#e08b74;font-size:12px;min-height:16px;margin-top:8px;}
+  .auth-ok{color:#8fcf9b;font-size:12px;min-height:16px;margin-top:8px;line-height:1.4;}
+  .auth-hint{font-size:11px;color:#7c828a;margin-top:2px;}
+
+  header{background:var(--shell);color:#fff;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+  .brand{display:flex;flex-direction:column;gap:2px;}
+  .brand .eyebrow{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--wood-3);font-weight:600;}
+  .brand h1{font-size:20px;}
+  .role-chip{display:flex;align-items:center;gap:10px;}
+  .role-badge{background:var(--shell-2);border:1px solid #3a3f45;color:#fff;padding:6px 12px;border-radius:20px;font-size:13px;display:flex;align-items:center;gap:6px;}
+  .role-badge .dot{width:7px;height:7px;border-radius:50%;background:var(--amber);}
+  .role-badge.uretim .dot{background:var(--green);}
+  .switch-btn{background:transparent;border:1px solid #4a4f55;color:#c9ccd0;padding:6px 12px;border-radius:20px;font-size:13px;}
+  .switch-btn:hover{border-color:#fff;color:#fff;}
+
+  .tabs{display:flex;gap:4px;padding:0 24px;background:var(--shell-2);}
+  .tab{padding:12px 16px;color:#b8bcc0;font-size:14px;font-weight:500;border-bottom:2px solid transparent;}
+  .tab.active{color:#fff;border-bottom-color:var(--amber);}
+  .tab:hover{color:#fff;}
+
+  main{max-width:1180px;margin:0 auto;padding:24px;}
+
+  .summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px;}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow);}
+  .stat .num{font-family:'Space Grotesk';font-size:26px;font-weight:700;}
+  .stat .label{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em;margin-top:4px;}
+
+  .filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:16px;}
+  .chip{padding:7px 14px;border-radius:20px;border:1px solid var(--line);background:var(--panel);font-size:13px;color:var(--muted);}
+  .chip.active{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .search{margin-left:auto;padding:8px 12px;border:1px solid var(--line);border-radius:8px;font-size:13px;min-width:220px;background:var(--panel);}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  thead th{text-align:left;padding:10px 12px;background:#FAF9F6;color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--line);white-space:nowrap;}
+  tbody td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:middle;}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:#FAFAF8;}
+  .status-pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:600;}
+  .status-pill.bekliyor{background:var(--red-bg);color:var(--red);}
+  .status-pill.uretildi{background:var(--green-bg);color:var(--green);}
+  .status-pill .dot{width:6px;height:6px;border-radius:50%;background:currentColor;}
+  .row-btn{padding:6px 12px;border-radius:6px;border:1px solid var(--line);background:#fff;font-size:12px;font-weight:600;color:var(--ink);}
+  .row-btn:hover{border-color:var(--ink);}
+  .row-btn.primary{background:var(--amber);border-color:var(--amber-dark);color:#fff;}
+  .row-btn.primary:hover{background:var(--amber-dark);}
+  .row-btn.ghost{background:transparent;border:none;color:var(--muted);text-decoration:underline;padding:6px 4px;}
+  .empty{padding:48px 24px;text-align:center;color:var(--muted);}
+  .empty b{display:block;color:var(--ink);font-family:'Space Grotesk';font-size:16px;margin-bottom:6px;}
+
+  .form-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px;max-width:640px;}
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .field{display:flex;flex-direction:column;gap:6px;}
+  .field.full{grid-column:1/-1;}
+  .field label{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;}
+  .field input,.field select,.field textarea{padding:9px 11px;border:1px solid var(--line);border-radius:7px;font-size:14px;background:#fff;color:var(--ink);}
+  .field input:focus,.field select:focus,.field textarea:focus{outline:2px solid var(--amber);outline-offset:1px;border-color:var(--amber);}
+  .field .hint{font-size:11px;color:var(--muted);}
+  .field.readout input{background:#FAF9F6;color:var(--muted);}
+  .form-actions{display:flex;gap:10px;margin-top:18px;}
+  .btn{padding:10px 18px;border-radius:8px;border:1px solid var(--line);background:#fff;font-size:14px;font-weight:600;}
+  .btn.primary{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .btn.primary:hover{background:#000;}
+  .btn:hover{border-color:var(--ink);}
+  .msg{font-size:13px;padding:10px 12px;border-radius:8px;margin-bottom:14px;}
+  .msg.ok{background:var(--green-bg);color:var(--green);}
+  .msg.err{background:var(--red-bg);color:var(--red);}
+
+  .overlay{position:fixed;inset:0;background:rgba(20,20,20,.45);display:flex;align-items:center;justify-content:center;padding:20px;z-index:50;}
+  .modal{background:#fff;border-radius:var(--radius);max-width:520px;width:100%;max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.25);}
+  .modal-head{padding:18px 22px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;}
+  .modal-head h3{font-size:17px;}
+  .modal-body{padding:20px 22px;}
+  .modal-foot{padding:16px 22px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:10px;}
+  .close-x{background:none;border:none;font-size:20px;color:var(--muted);line-height:1;}
+  .meta-row{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);padding:4px 0;border-bottom:1px dashed var(--line);}
+  .meta-row:last-child{border-bottom:none;}
+  .loading{padding:60px;text-align:center;color:var(--muted);}
+  .asama-node:hover rect{opacity:.85;}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+(function(){
+  // ---- Supabase bağlantısı ----
+  const SUPABASE_URL = "https://jsjqyoibvdoqhvijhmwh.supabase.co";
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpzanF5b2lidmRvcWh2aWpobXdoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4NjY5MzQsImV4cCI6MjA5ODQ0MjkzNH0.TgSbpElM7N1qoEB145u7_4yTxcsUe0eupiRe9Vxp7Bw";
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const URETIM_KAYIT_KODU = "uretim2026"; // Üretim rolüyle kayıt olmak için gereken kod — değiştirmek için burayı düzenle
+  const CINS_OPTIONS = ["Kavak/Kavak", "Kavak/Huş", "Kayın/Kayın"];
+  const ASAMA_OPTIONS = ["Sırada", "Üretimde", "Ebatlamada", "Sevkiyatta"];
+
+  let state = {
+    user: null,
+    profile: null,        // {id, ad_soyad, rol}
+    profilesMap: {},
+    authView: 'login',     // 'login' | 'signup'
+    authError: '',
+    authOk: '',
+    authBusy: false,
+    activeTab: 'liste',
+    filterStatus: 'bekliyor',
+    search: '',
+    orders: [],
+    hatKapasiteleri: {},
+    loading: true,
+    modal: null,
+    toast: null
+  };
+
+  const app = document.getElementById('app');
+
+  function fmtDate(iso){ if(!iso) return '—'; const d = new Date(iso); if(isNaN(d)) return iso; return d.toLocaleDateString('tr-TR'); }
+  function fmtDateTime(iso){ if(!iso) return '—'; const d = new Date(iso); if(isNaN(d)) return iso; return d.toLocaleDateString('tr-TR') + ' ' + d.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'}); }
+  function todayStr(){ return new Date().toISOString().slice(0,10); }
+  function calcM3(en,boy,kalinlik,adet){ const v = (parseFloat(en)||0)*(parseFloat(boy)||0)*(parseFloat(kalinlik)||0)*(parseFloat(adet)||0)/10000000; return Math.round(v*1000)/1000; }
+  function escapeHtml(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function sorumluAdi(id){ return state.profilesMap[id] || '—'; }
+
+  // ---------- Auth ----------
+  async function init(){
+    const { data:{ session } } = await sb.auth.getSession();
+    if(session){ await afterLogin(session.user); } else { state.loading=false; render(); }
+  }
+
+  async function afterLogin(user){
+    state.user = user;
+    const { data: profile } = await sb.from('profiles').select('*').eq('id', user.id).single();
+    state.profile = profile;
+    await loadProfilesMap();
+    await loadOrders();
+    await loadHatKapasiteleri();
+    subscribeRealtime();
+  }
+
+  async function loadHatKapasiteleri(){
+    const { data, error } = await sb.from('uretim_asamalari').select('*');
+    if(!error){
+      state.hatKapasiteleri = {};
+      (data||[]).forEach(a => state.hatKapasiteleri[a.asama_key] = a);
+    }
+  }
+
+  async function loadProfilesMap(){
+    const { data } = await sb.from('profiles').select('id,ad_soyad');
+    state.profilesMap = {};
+    (data||[]).forEach(p => state.profilesMap[p.id] = p.ad_soyad);
+  }
+
+  function subscribeRealtime(){
+    sb.channel('siparisler-rt')
+      .on('postgres_changes', { event:'*', schema:'public', table:'siparisler' }, () => {
+        if(state.activeTab === 'liste' && !state.modal) loadOrders(true);
+      })
+      .subscribe();
+  }
+
+  async function doLogin(email, password){
+    state.authBusy = true; state.authError=''; render();
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    state.authBusy = false;
+    if(error){ state.authError = 'Giriş başarısız: e-posta veya şifre hatalı.'; render(); return; }
+    await afterLogin(data.user);
+    render();
+  }
+
+  async function doSignup(adSoyad, email, password, rol, kod){
+    state.authBusy = true; state.authError=''; state.authOk=''; render();
+    if(rol === 'uretim' && kod !== URETIM_KAYIT_KODU){
+      state.authBusy = false; state.authError = 'Üretim kayıt kodu hatalı.'; render(); return;
+    }
+    const { data, error } = await sb.auth.signUp({ email, password });
+    if(error){ state.authBusy=false; state.authError = 'Kayıt başarısız: ' + error.message; render(); return; }
+    if(!data.user){ state.authBusy=false; state.authError = 'Kayıt oluşturulamadı.'; render(); return; }
+    const { error: profErr } = await sb.from('profiles').insert([{ id: data.user.id, ad_soyad: adSoyad, rol: rol }]);
+    state.authBusy = false;
+    if(profErr){ state.authError = 'Profil oluşturulamadı: ' + profErr.message; render(); return; }
+    if(data.session){
+      await afterLogin(data.user);
+      render();
+    }else{
+      state.authOk = 'Hesabın oluşturuldu. E-postana gelen onay linkine tıkladıktan sonra giriş yapabilirsin.';
+      state.authView = 'login';
+      render();
+    }
+  }
+
+  async function doLogout(){
+    await sb.auth.signOut();
+    state = Object.assign(state, { user:null, profile:null, orders:[], authView:'login', authError:'', authOk:'', activeTab:'liste', filterStatus:'bekliyor', search:'', modal:null });
+    render();
+  }
+
+  // ---------- Data ----------
+  async function loadOrders(silent){
+    if(!silent){ state.loading = true; render(); }
+    const { data, error } = await sb.from('siparisler').select('*').order('created_at', { ascending:false });
+    if(!error) state.orders = data || [];
+    state.loading = false;
+    render();
+  }
+
+  function sortedFilteredOrders(){
+    let list = state.orders.slice().sort((a,b)=> new Date(a.created_at) - new Date(b.created_at));
+    list = list.map((o,i)=> Object.assign({}, o, {no:i+1}));
+    if(state.filterStatus !== 'tumu') list = list.filter(o=>o.status===state.filterStatus);
+    if(state.search.trim()){
+      const q = state.search.trim().toLocaleLowerCase('tr-TR');
+      list = list.filter(o => sorumluAdi(o.sorumlu_id).toLocaleLowerCase('tr-TR').includes(q) || (o.cins||'').toLocaleLowerCase('tr-TR').includes(q));
+    }
+    return list.slice().sort((a,b)=> new Date(b.created_at) - new Date(a.created_at));
+  }
+
+  // ---------- Render ----------
+  function render(){
+    if(!state.user){ renderGate(); return; }
+    const orders = state.orders;
+    const bekleyen = orders.filter(o=>o.status==='bekliyor').length;
+    const uretilen = orders.filter(o=>o.status==='uretildi').length;
+    const bekleyenM3 = orders.filter(o=>o.status==='bekliyor').reduce((s,o)=>s+(o.m3||0),0);
+    const list = sortedFilteredOrders();
+    const rol = state.profile ? state.profile.rol : null;
+
+    app.innerHTML = `
+      <div class="veneer"></div>
+      <header>
+        <div class="brand"><div class="eyebrow">Kontraplak Üretim</div><h1>Sipariş Takip</h1></div>
+        <div class="role-chip">
+          <div class="role-badge ${rol}"><span class="dot"></span>${escapeHtml(state.profile?state.profile.ad_soyad:'')} · ${rol==='uretim'?'Üretim':'Satış'}</div>
+          <button class="switch-btn" data-action="logout">Çıkış Yap</button>
+        </div>
+      </header>
+      <div class="tabs">
+        ${rol==='satis' ? `<div class="tab ${state.activeTab==='yeni'?'active':''}" data-action="tab" data-tab="yeni">Yeni Sipariş</div>` : ''}
+        <div class="tab ${state.activeTab==='liste'?'active':''}" data-action="tab" data-tab="liste">Siparişler</div>
+        <div class="tab ${state.activeTab==='hat'?'active':''}" data-action="tab" data-tab="hat">Üretim Hattı</div>
+      </div>
+      <main>
+        ${state.toast ? `<div class="msg ${state.toast.type==='ok'?'ok':'err'}">${escapeHtml(state.toast.text)}</div>` : ''}
+        ${state.loading ? `<div class="loading">Yükleniyor…</div>` : (
+          state.activeTab==='yeni' ? renderForm() :
+          state.activeTab==='hat' ? renderHatTab(rol) :
+          renderListTab(orders,bekleyen,uretilen,bekleyenM3,list,rol)
+        )}
+      </main>
+      ${state.modal ? renderModal(rol) : ''}
+    `;
+  }
+
+  function renderListTab(orders,bekleyen,uretilen,bekleyenM3,list,rol){
+    return `
+      <div class="summary">
+        <div class="stat"><div class="num">${bekleyen}</div><div class="label">Bekleyen Sipariş</div></div>
+        <div class="stat"><div class="num">${uretilen}</div><div class="label">Üretilen Sipariş</div></div>
+        <div class="stat"><div class="num">${bekleyenM3.toFixed(2)}</div><div class="label">Bekleyen m³</div></div>
+        <div class="stat"><div class="num">${orders.length}</div><div class="label">Toplam Kayıt</div></div>
+      </div>
+      <div class="filters">
+        <div class="chip ${state.filterStatus==='bekliyor'?'active':''}" data-action="filter" data-status="bekliyor">Bekleyen</div>
+        <div class="chip ${state.filterStatus==='uretildi'?'active':''}" data-action="filter" data-status="uretildi">Üretilen</div>
+        <div class="chip ${state.filterStatus==='tumu'?'active':''}" data-action="filter" data-status="tumu">Tümü</div>
+        <input class="search" placeholder="Sorumlu veya cins ara…" value="${escapeHtml(state.search)}" data-action="search"/>
+        <button class="row-btn" data-action="refresh" title="Listeyi yenile">↻ Yenile</button>
+      </div>
+      <div class="card">
+        ${list.length===0 ? `<div class="empty"><b>Kayıt yok</b>Bu filtreye uyan sipariş bulunamadı.</div>` : `
+        <table>
+          <thead><tr><th>No</th><th>Sipariş Trh.</th><th>Termin</th><th>Cins</th><th>Ölçü (En×Boy×Kal.)</th><th>Adet</th><th>m³</th><th>Sorumlu</th><th>Aşama</th><th>Durum</th><th></th></tr></thead>
+          <tbody>${list.map(o=>rowHtml(o,rol)).join('')}</tbody>
+        </table>`}
+      </div>
+    `;
+  }
+
+  function rowHtml(o,rol){
+    const editedBadge = o.updated_at && o.updated_at !== o.created_at ? `<div class="hint" style="margin-top:2px;">düzenlendi: ${fmtDate(o.updated_at)}</div>` : '';
+    let actionBtn = '';
+    if(o.status==='bekliyor'){
+      if(rol==='satis'){ actionBtn = `<button class="row-btn" data-action="edit" data-id="${o.id}">Düzenle</button>`; }
+      else{ actionBtn = `<button class="row-btn primary" data-action="mark" data-id="${o.id}">Üretildi işaretle</button>`; }
+    }else{
+      actionBtn = `<button class="row-btn ghost" data-action="detail" data-id="${o.id}">Detay</button>`;
+    }
+    let stageCell = '—';
+    if(o.status==='bekliyor'){
+      if(rol==='uretim'){
+        stageCell = `<select data-action="update-stage" data-id="${o.id}" style="padding:5px 8px;border:1px solid var(--line);border-radius:6px;font-size:12px;background:#fff;">
+          ${ASAMA_OPTIONS.map(a=>`<option value="${a}" ${o.asama===a?'selected':''}>${a}</option>`).join('')}
+        </select>`;
+      }else{ stageCell = escapeHtml(o.asama || '—'); }
+    }
+    return `<tr>
+      <td class="mono">${o.no}</td>
+      <td>${fmtDate(o.siparis_tarihi)}${editedBadge}</td>
+      <td>${fmtDate(o.termin_tarihi)}</td>
+      <td>${escapeHtml(o.cins)}</td>
+      <td class="mono">${o.en}×${o.boy}×${o.kalinlik}</td>
+      <td class="mono">${o.adet}</td>
+      <td class="mono">${(o.m3||0).toFixed(3)}</td>
+      <td>${escapeHtml(sorumluAdi(o.sorumlu_id))}</td>
+      <td>${stageCell}</td>
+      <td><span class="status-pill ${o.status}"><span class="dot"></span>${o.status==='bekliyor'?'Bekliyor':'Üretildi'}</span></td>
+      <td>${actionBtn}</td>
+    </tr>`;
+  }
+
+  function renderForm(editOrder){
+    const o = editOrder || {};
+    const isEdit = !!editOrder;
+    return `
+      <div class="form-card">
+        <h2 style="margin-bottom:4px;">${isEdit?'Siparişi Düzenle':'Yeni Sipariş'}</h2>
+        <p class="hint" style="margin-bottom:16px;">${isEdit?'Değişiklikler kayıt altına alınır ve düzenleme tarihi görünür olur.':'Sipariş bilgilerini girin — m³ otomatik hesaplanır.'}</p>
+        <form id="order-form">
+          <div class="form-grid">
+            <div class="field"><label>Sipariş Tarihi</label><input type="date" name="siparis_tarihi" required value="${o.siparis_tarihi||todayStr()}"></div>
+            <div class="field"><label>Termin Tarihi</label><input type="date" name="termin_tarihi" required value="${o.termin_tarihi||''}"></div>
+            <div class="field full"><label>Cins</label><select name="cins" required>
+              <option value="" disabled ${!o.cins?'selected':''}>Seçiniz…</option>
+              ${CINS_OPTIONS.map(c=>`<option value="${escapeHtml(c)}" ${o.cins===c?'selected':''}>${escapeHtml(c)}</option>`).join('')}
+            </select></div>
+            <div class="field"><label>En (cm)</label><input type="number" step="any" min="0" name="en" required value="${o.en||''}"></div>
+            <div class="field"><label>Boy (cm)</label><input type="number" step="any" min="0" name="boy" required value="${o.boy||''}"></div>
+            <div class="field"><label>Kalınlık (mm)</label><input type="number" step="any" min="0" name="kalinlik" required value="${o.kalinlik||''}"></div>
+            <div class="field"><label>Adet</label><input type="number" step="1" min="0" name="adet" required value="${o.adet||''}"></div>
+            <div class="field readout"><label>m³ (otomatik)</label><input type="text" id="m3-readout" readonly value="${(o.m3||0).toFixed(3)}"></div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn primary">${isEdit?'Kaydet':'Siparişi Ekle'}</button>
+            ${isEdit?`<button type="button" class="btn" data-action="cancel-edit">Vazgeç</button>`:''}
+          </div>
+        </form>
+      </div>
+    `;
+  }
+
+  const HAT_ADLAR = {
+    soyma: 'Soyma hattı', roleli_kurutma: 'Röleli kurutma', telli_kurutma: 'Telli kurutma',
+    buyuk_hat: 'Büyük hat', kucuk_hat: 'Küçük hat', soguk_pres: 'Soğuk pres',
+    sicak_pres: 'Sıcak pres', ebatlama: 'Ebatlama', sevkiyat: 'Sevkiyat'
+  };
+
+  function kapasiteMetni(key, rol){
+    const a = state.hatKapasiteleri[key];
+    if(!a) return '';
+    const birim = rol==='uretim' ? 'ikisi' : (a.gorunur_birim||'ikisi');
+    const parts = [];
+    if((birim==='m3'||birim==='ikisi') && a.kapasite_m3!=null) parts.push(a.kapasite_m3+' m³/gün');
+    if((birim==='adet'||birim==='ikisi') && a.kapasite_adet!=null) parts.push(a.kapasite_adet+' adet/gün');
+    return parts.join(' · ');
+  }
+
+  function renderHatTab(rol){
+    const cap = (k) => escapeHtml(kapasiteMetni(k, rol) || '—');
+    return `
+      <p class="hint" style="margin-bottom:14px;">Bir aşamaya tıklayarak kapasite bilgisini görebilir${rol==='uretim'?' ve düzenleyebilirsin':''}.</p>
+      <div class="card" style="padding:20px;">
+        <svg width="100%" viewBox="0 0 680 742" xmlns="http://www.w3.org/2000/svg" role="img" style="display:block;">
+          <defs>
+            <marker id="hatArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="#888" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+
+          <g class="asama-node" data-action="open-asama" data-key="soyma" style="cursor:pointer;">
+            <rect x="220" y="24" width="240" height="54" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="1"/>
+            <text x="340" y="44" text-anchor="middle" font-size="11" fill="#085041">${cap('soyma')}</text>
+            <text x="340" y="63" text-anchor="middle" font-size="13" font-weight="600" fill="#04342C">Soyma hattı</text>
+          </g>
+
+          <line x1="340" y1="78" x2="340" y2="108" stroke="#666" stroke-width="1.2" marker-end="url(#hatArrow)"/>
+          <text x="340" y="124" text-anchor="middle" font-size="11" fill="#555">Kurutma hattı</text>
+
+          <line x1="340" y1="130" x2="200" y2="130" stroke="#aaa" stroke-width="1"/>
+          <line x1="200" y1="130" x2="200" y2="150" stroke="#aaa" stroke-width="1" marker-end="url(#hatArrow)"/>
+          <line x1="340" y1="130" x2="480" y2="130" stroke="#aaa" stroke-width="1"/>
+          <line x1="480" y1="130" x2="480" y2="150" stroke="#aaa" stroke-width="1" marker-end="url(#hatArrow)"/>
+
+          <g class="asama-node" data-action="open-asama" data-key="roleli_kurutma" style="cursor:pointer;">
+            <rect x="110" y="150" width="180" height="48" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="1"/>
+            <text x="200" y="170" text-anchor="middle" font-size="12" font-weight="600" fill="#042C53">Röleli kurutma</text>
+            <text x="200" y="187" text-anchor="middle" font-size="10.5" fill="#185FA5">${cap('roleli_kurutma')}</text>
+          </g>
+          <g class="asama-node" data-action="open-asama" data-key="telli_kurutma" style="cursor:pointer;">
+            <rect x="390" y="150" width="180" height="48" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="1"/>
+            <text x="480" y="170" text-anchor="middle" font-size="12" font-weight="600" fill="#042C53">Telli kurutma</text>
+            <text x="480" y="187" text-anchor="middle" font-size="10.5" fill="#185FA5">${cap('telli_kurutma')}</text>
+          </g>
+
+          <line x1="200" y1="198" x2="200" y2="258" stroke="#aaa" stroke-width="1"/>
+          <line x1="480" y1="198" x2="480" y2="258" stroke="#aaa" stroke-width="1"/>
+          <line x1="200" y1="258" x2="340" y2="258" stroke="#aaa" stroke-width="1"/>
+          <line x1="480" y1="258" x2="340" y2="258" stroke="#aaa" stroke-width="1"/>
+          <line x1="340" y1="258" x2="340" y2="278" stroke="#666" stroke-width="1.2" marker-end="url(#hatArrow)"/>
+
+          <text x="340" y="296" text-anchor="middle" font-size="11" fill="#555">Tutkallama hattı</text>
+          <line x1="340" y1="302" x2="200" y2="302" stroke="#aaa" stroke-width="1"/>
+          <line x1="200" y1="302" x2="200" y2="322" stroke="#aaa" stroke-width="1" marker-end="url(#hatArrow)"/>
+          <line x1="340" y1="302" x2="480" y2="302" stroke="#aaa" stroke-width="1"/>
+          <line x1="480" y1="302" x2="480" y2="322" stroke="#aaa" stroke-width="1" marker-end="url(#hatArrow)"/>
+
+          <g class="asama-node" data-action="open-asama" data-key="buyuk_hat" style="cursor:pointer;">
+            <rect x="110" y="322" width="180" height="52" rx="8" fill="#FAEEDA" stroke="#854F0B" stroke-width="1"/>
+            <text x="200" y="343" text-anchor="middle" font-size="13" font-weight="600" fill="#412402">Büyük hat</text>
+            <text x="200" y="361" text-anchor="middle" font-size="11" fill="#633806">${kapasiteMetni('buyuk_hat',rol) ? cap('buyuk_hat') : 'Tutkallama + dizme'}</text>
+          </g>
+          <g class="asama-node" data-action="open-asama" data-key="kucuk_hat" style="cursor:pointer;">
+            <rect x="390" y="322" width="180" height="52" rx="8" fill="#FAEEDA" stroke="#854F0B" stroke-width="1"/>
+            <text x="480" y="343" text-anchor="middle" font-size="13" font-weight="600" fill="#412402">Küçük hat</text>
+            <text x="480" y="361" text-anchor="middle" font-size="11" fill="#633806">${kapasiteMetni('kucuk_hat',rol) ? cap('kucuk_hat') : 'Tutkallama + dizme'}</text>
+          </g>
+
+          <line x1="200" y1="374" x2="200" y2="428" stroke="#aaa" stroke-width="1"/>
+          <line x1="480" y1="374" x2="480" y2="428" stroke="#aaa" stroke-width="1"/>
+          <line x1="200" y1="428" x2="340" y2="428" stroke="#aaa" stroke-width="1"/>
+          <line x1="480" y1="428" x2="340" y2="428" stroke="#aaa" stroke-width="1"/>
+          <line x1="340" y1="428" x2="340" y2="448" stroke="#666" stroke-width="1.2" marker-end="url(#hatArrow)"/>
+
+          <g class="asama-node" data-action="open-asama" data-key="soguk_pres" style="cursor:pointer;">
+            <rect x="220" y="448" width="240" height="54" rx="8" fill="#FAECE7" stroke="#993C1D" stroke-width="1"/>
+            <text x="340" y="468" text-anchor="middle" font-size="11" fill="#711B13">${cap('soguk_pres')}</text>
+            <text x="340" y="487" text-anchor="middle" font-size="13" font-weight="600" fill="#4A1B0C">Soğuk pres</text>
+          </g>
+          <line x1="340" y1="502" x2="340" y2="526" stroke="#666" stroke-width="1.2" marker-end="url(#hatArrow)"/>
+
+          <g class="asama-node" data-action="open-asama" data-key="sicak_pres" style="cursor:pointer;">
+            <rect x="220" y="526" width="240" height="54" rx="8" fill="#FAECE7" stroke="#993C1D" stroke-width="1"/>
+            <text x="340" y="546" text-anchor="middle" font-size="11" fill="#711B13">${cap('sicak_pres')}</text>
+            <text x="340" y="565" text-anchor="middle" font-size="13" font-weight="600" fill="#4A1B0C">Sıcak pres</text>
+          </g>
+          <line x1="340" y1="580" x2="340" y2="604" stroke="#666" stroke-width="1.2" marker-end="url(#hatArrow)"/>
+
+          <g class="asama-node" data-action="open-asama" data-key="ebatlama" style="cursor:pointer;">
+            <rect x="220" y="604" width="240" height="54" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="1"/>
+            <text x="340" y="624" text-anchor="middle" font-size="11" fill="#3C3489">${cap('ebatlama')}</text>
+            <text x="340" y="643" text-anchor="middle" font-size="13" font-weight="600" fill="#26215C">Ebatlama</text>
+          </g>
+          <line x1="340" y1="658" x2="340" y2="668" stroke="#666" stroke-width="1.2" marker-end="url(#hatArrow)"/>
+
+          <g class="asama-node" data-action="open-asama" data-key="sevkiyat" style="cursor:pointer;">
+            <rect x="220" y="668" width="240" height="54" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="1"/>
+            <text x="340" y="688" text-anchor="middle" font-size="11" fill="#5F5E5A">${cap('sevkiyat')}</text>
+            <text x="340" y="707" text-anchor="middle" font-size="13" font-weight="600" fill="#2C2C2A">Sevkiyat</text>
+          </g>
+        </svg>
+      </div>
+    `;
+  }
+
+  function renderModal(rol){
+    const m = state.modal;
+    if(m.type==='edit'){
+      return `<div class="overlay" data-action="overlay-close"><div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-head"><h3>Siparişi Düzenle</h3><button class="close-x" data-action="close-modal">×</button></div>
+        <div class="modal-body">${renderForm(m.order)}</div>
+      </div></div>`;
+    }
+    if(m.type==='mark'){
+      const o = m.order;
+      return `<div class="overlay" data-action="overlay-close"><div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-head"><h3>Üretildi Olarak İşaretle</h3><button class="close-x" data-action="close-modal">×</button></div>
+        <div class="modal-body">
+          <p class="hint" style="margin-bottom:14px;">Sipariş #${o.no} · ${escapeHtml(o.cins)} · ${o.en}×${o.boy}×${o.kalinlik} · Planlanan ${o.adet} adet / ${(o.m3||0).toFixed(3)} m³</p>
+          <form id="mark-form">
+            <div class="form-grid">
+              <div class="field"><label>Üretim Tarihi</label><input type="date" name="uretim_tarihi" required value="${todayStr()}"></div>
+              <div class="field"><label>Gerçekleşen Adet</label><input type="number" step="1" min="0" name="gercek_adet" required value="${o.adet}"></div>
+              <div class="field readout"><label>Gerçekleşen m³ (otomatik)</label><input type="text" id="gercek-m3-readout" readonly value="${(o.m3||0).toFixed(3)}"></div>
+              <div class="field full"><label>Not / Açıklama</label><textarea name="uretim_notu" rows="3" placeholder="opsiyonel"></textarea></div>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn primary">Üretildi Olarak Kaydet</button>
+              <button type="button" class="btn" data-action="close-modal">Vazgeç</button>
+            </div>
+          </form>
+        </div>
+      </div></div>`;
+    }
+    if(m.type==='detail'){
+      const o = m.order;
+      return `<div class="overlay" data-action="overlay-close"><div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-head"><h3>Sipariş #${o.no} Detayı</h3><button class="close-x" data-action="close-modal">×</button></div>
+        <div class="modal-body">
+          <div class="meta-row"><span>Cins</span><b>${escapeHtml(o.cins)}</b></div>
+          <div class="meta-row"><span>Ölçü</span><b>${o.en}×${o.boy}×${o.kalinlik}</b></div>
+          <div class="meta-row"><span>Planlanan Adet / m³</span><b>${o.adet} / ${(o.m3||0).toFixed(3)}</b></div>
+          <div class="meta-row"><span>Sorumlu</span><b>${escapeHtml(sorumluAdi(o.sorumlu_id))}</b></div>
+          ${o.status==='bekliyor' ? `<div class="meta-row"><span>Aşama</span><b>${escapeHtml(o.asama||'—')}</b></div>` : ''}
+          <div class="meta-row"><span>Sipariş girişi</span><b>${fmtDateTime(o.created_at)}</b></div>
+          ${o.updated_at && o.updated_at!==o.created_at ? `<div class="meta-row"><span>Son düzenleme</span><b>${fmtDateTime(o.updated_at)}</b></div>`:''}
+          ${o.status==='uretildi' ? `
+          <div class="meta-row" style="margin-top:10px;"><span>Üretim Tarihi</span><b>${fmtDate(o.uretim_tarihi)}</b></div>
+          <div class="meta-row"><span>Gerçekleşen Adet / m³</span><b>${o.gercek_adet} / ${(o.gercek_m3||0).toFixed(3)}</b></div>
+          <div class="meta-row"><span>Üretim kaydı</span><b>${fmtDateTime(o.uretildi_tarihi)}</b></div>
+          ${o.uretim_notu ? `<div class="meta-row"><span>Not</span><b>${escapeHtml(o.uretim_notu)}</b></div>`:''}
+          `:''}
+        </div>
+        <div class="modal-foot"><button class="btn" data-action="close-modal">Kapat</button></div>
+      </div></div>`;
+    }
+    if(m.type==='kapasite'){
+      const key = m.key;
+      const a = state.hatKapasiteleri[key] || {};
+      const ad = HAT_ADLAR[key] || key;
+      if(rol!=='uretim'){
+        const birim = a.gorunur_birim || 'ikisi';
+        return `<div class="overlay" data-action="overlay-close"><div class="modal" onclick="event.stopPropagation()">
+          <div class="modal-head"><h3>${escapeHtml(ad)}</h3><button class="close-x" data-action="close-modal">×</button></div>
+          <div class="modal-body">
+            ${(birim==='m3'||birim==='ikisi') ? `<div class="meta-row"><span>Kapasite (m³/gün)</span><b>${a.kapasite_m3!=null?a.kapasite_m3:'—'}</b></div>` : ''}
+            ${(birim==='adet'||birim==='ikisi') ? `<div class="meta-row"><span>Kapasite (adet/gün)</span><b>${a.kapasite_adet!=null?a.kapasite_adet:'—'}</b></div>` : ''}
+            ${a.notlar ? `<div class="meta-row"><span>Not</span><b>${escapeHtml(a.notlar)}</b></div>` : ''}
+            ${(!a.kapasite_m3 && !a.kapasite_adet) ? `<p class="hint">Bu aşama için henüz kapasite bilgisi girilmemiş.</p>` : ''}
+          </div>
+          <div class="modal-foot"><button class="btn" data-action="close-modal">Kapat</button></div>
+        </div></div>`;
+      }
+      return `<div class="overlay" data-action="overlay-close"><div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-head"><h3>${escapeHtml(ad)} — Kapasite</h3><button class="close-x" data-action="close-modal">×</button></div>
+        <div class="modal-body">
+          <form id="kapasite-form">
+            <div class="form-grid">
+              <div class="field"><label>Kapasite (m³/gün)</label><input type="number" step="any" min="0" name="kapasite_m3" value="${a.kapasite_m3!=null?a.kapasite_m3:''}"></div>
+              <div class="field"><label>Kapasite (adet/gün)</label><input type="number" step="any" min="0" name="kapasite_adet" value="${a.kapasite_adet!=null?a.kapasite_adet:''}"></div>
+              <div class="field full"><label>Satışa görünen birim</label>
+                <select name="gorunur_birim">
+                  <option value="ikisi" ${(a.gorunur_birim||'ikisi')==='ikisi'?'selected':''}>İkisi de</option>
+                  <option value="m3" ${a.gorunur_birim==='m3'?'selected':''}>Sadece m³</option>
+                  <option value="adet" ${a.gorunur_birim==='adet'?'selected':''}>Sadece adet</option>
+                </select>
+                <div class="hint">Üretim rolü her zaman ikisini de görür, bu seçim sadece satış ekranını etkiler.</div>
+              </div>
+              <div class="field full"><label>Not</label><textarea name="notlar" rows="3" placeholder="opsiyonel">${escapeHtml(a.notlar||'')}</textarea></div>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn primary">Kaydet</button>
+              <button type="button" class="btn" data-action="close-modal">Vazgeç</button>
+            </div>
+          </form>
+        </div>
+      </div></div>`;
+    }
+    return '';
+  }
+
+
+  function renderGate(){
+    const isLogin = state.authView === 'login';
+    app.innerHTML = `
+      <div class="veneer"></div>
+      <div class="gate">
+        <div class="gate-logo">Kontraplak Üretim</div>
+        <div class="gate-title">Sipariş Takip</div>
+        <div class="gate-sub">Satışçılar sipariş girer, üretim tamamlandığında burada güncellenir ve otomatik arşivlenir.</div>
+        <div class="auth-card">
+          <div class="auth-tabs">
+            <div class="auth-tab ${isLogin?'active':''}" data-action="auth-tab" data-view="login">Giriş Yap</div>
+            <div class="auth-tab ${!isLogin?'active':''}" data-action="auth-tab" data-view="signup">Kayıt Ol</div>
+          </div>
+          <form id="auth-form">
+            ${!isLogin ? `<div class="auth-field"><label>Ad Soyad</label><input type="text" name="ad_soyad" required></div>` : ''}
+            <div class="auth-field"><label>E-posta</label><input type="email" name="email" required></div>
+            <div class="auth-field"><label>Şifre</label><input type="password" name="password" required minlength="6"></div>
+            ${!isLogin ? `
+            <div class="auth-field"><label>Rol</label>
+              <select name="rol" id="signup-rol">
+                <option value="satis">Satış</option>
+                <option value="uretim">Üretim</option>
+              </select>
+            </div>
+            <div class="auth-field" id="kod-field" style="display:none;"><label>Üretim Kayıt Kodu</label><input type="text" name="kod"></div>
+            ` : ''}
+            <button type="submit" class="auth-submit" ${state.authBusy?'disabled':''}>${state.authBusy ? 'Lütfen bekleyin…' : (isLogin?'Giriş Yap':'Hesap Oluştur')}</button>
+          </form>
+          <div class="auth-error">${escapeHtml(state.authError)}</div>
+          ${state.authOk ? `<div class="auth-ok">${escapeHtml(state.authOk)}</div>` : ''}
+        </div>
+      </div>
+    `;
+    const rolSel = document.getElementById('signup-rol');
+    if(rolSel){
+      rolSel.addEventListener('change', ()=>{
+        document.getElementById('kod-field').style.display = rolSel.value==='uretim' ? 'flex' : 'none';
+      });
+    }
+  }
+
+  // ---------- Events ----------
+  app.addEventListener('click', function(e){
+    const t = e.target.closest('[data-action]');
+    if(!t){ if(e.target.classList.contains('overlay')){ state.modal=null; render(); } return; }
+    const action = t.dataset.action;
+    if(action==='auth-tab'){ state.authView = t.dataset.view; state.authError=''; state.authOk=''; render(); }
+    else if(action==='logout'){ doLogout(); }
+    else if(action==='refresh'){ loadOrders(); }
+    else if(action==='tab'){ state.activeTab = t.dataset.tab; state.toast=null; render(); }
+    else if(action==='filter'){ state.filterStatus = t.dataset.status; render(); }
+    else if(action==='edit'){ const o = state.orders.find(x=>x.id===t.dataset.id); state.modal={type:'edit', order:o}; render(); }
+    else if(action==='mark'){ const o = state.orders.find(x=>x.id===t.dataset.id); state.modal={type:'mark', order:o}; render(); }
+    else if(action==='detail'){ const o = state.orders.find(x=>x.id===t.dataset.id); const list = sortedFilteredOrders(); const withNo = list.find(x=>x.id===o.id); state.modal={type:'detail', order:Object.assign({},o,{no:withNo?withNo.no:''})}; render(); }
+    else if(action==='open-asama'){ state.modal = { type:'kapasite', key: t.dataset.key }; render(); }
+    else if(action==='close-modal' || action==='cancel-edit'){ state.modal=null; render(); }
+  });
+
+  app.addEventListener('input', function(e){
+    if(e.target.matches('[data-action="search"]')){
+      state.search = e.target.value; render();
+      const s = document.querySelector('[data-action="search"]');
+      if(s){ s.focus(); s.selectionStart = s.value.length; }
+    }
+    if(e.target.closest('#order-form')){
+      const form = e.target.closest('#order-form');
+      const readout = document.getElementById('m3-readout');
+      if(readout) readout.value = calcM3(form.en.value, form.boy.value, form.kalinlik.value, form.adet.value).toFixed(3);
+    }
+    if(e.target.closest('#mark-form') && e.target.name==='gercek_adet'){
+      const o = state.modal.order;
+      const readout = document.getElementById('gercek-m3-readout');
+      if(readout) readout.value = calcM3(o.en,o.boy,o.kalinlik,e.target.value).toFixed(3);
+    }
+  });
+
+  app.addEventListener('change', async function(e){
+    if(e.target.matches('[data-action="update-stage"]')){
+      const id = e.target.dataset.id;
+      const { error } = await sb.from('siparisler').update({ asama: e.target.value }).eq('id', id);
+      if(!error){ const idx = state.orders.findIndex(o=>o.id===id); if(idx>-1) state.orders[idx].asama = e.target.value; state.toast={type:'ok',text:'Aşama güncellendi.'}; }
+      else state.toast = {type:'err', text:'Aşama güncellenemedi.'};
+      render();
+    }
+  });
+
+  app.addEventListener('submit', async function(e){
+    e.preventDefault();
+
+    if(e.target.id==='auth-form'){
+      const f = e.target;
+      if(state.authView==='login'){
+        await doLogin(f.email.value.trim(), f.password.value);
+      }else{
+        await doSignup(f.ad_soyad.value.trim(), f.email.value.trim(), f.password.value, f.rol.value, f.kod ? f.kod.value.trim() : '');
+      }
+      return;
+    }
+
+    if(e.target.id==='kapasite-form'){
+      const f = e.target;
+      const key = state.modal.key;
+      const payload = {
+        asama_key: key,
+        asama_adi: HAT_ADLAR[key] || key,
+        kapasite_m3: f.kapasite_m3.value === '' ? null : parseFloat(f.kapasite_m3.value),
+        kapasite_adet: f.kapasite_adet.value === '' ? null : parseFloat(f.kapasite_adet.value),
+        gorunur_birim: f.gorunur_birim.value,
+        notlar: f.notlar.value.trim(),
+        updated_at: new Date().toISOString(),
+        updated_by: state.user.id
+      };
+      const { error } = await sb.from('uretim_asamalari').upsert(payload, { onConflict: 'asama_key' });
+      state.toast = error ? {type:'err', text:'Kaydedilemedi: '+error.message} : {type:'ok', text:'Kapasite güncellendi.'};
+      state.modal = null;
+      await loadHatKapasiteleri();
+      render();
+      return;
+    }
+
+    if(e.target.id==='order-form'){
+      const f = e.target;
+      const data = {
+        siparis_tarihi: f.siparis_tarihi.value,
+        termin_tarihi: f.termin_tarihi.value,
+        cins: f.cins.value,
+        en: parseFloat(f.en.value),
+        boy: parseFloat(f.boy.value),
+        kalinlik: parseFloat(f.kalinlik.value),
+        adet: parseInt(f.adet.value,10)
+      };
+      data.m3 = calcM3(data.en,data.boy,data.kalinlik,data.adet);
+
+      if(state.modal && state.modal.type==='edit'){
+        const { error } = await sb.from('siparisler').update(Object.assign({}, data, { updated_at: new Date().toISOString() })).eq('id', state.modal.order.id);
+        state.toast = error ? {type:'err', text:'Güncellenemedi: '+error.message} : {type:'ok', text:'Kaydedildi.'};
+        state.modal = null;
+      } else {
+        const payload = Object.assign({}, data, { sorumlu_id: state.user.id, status:'bekliyor', asama: ASAMA_OPTIONS[0] });
+        const { error } = await sb.from('siparisler').insert([payload]);
+        state.toast = error ? {type:'err', text:'Eklenemedi: '+error.message} : {type:'ok', text:'Sipariş eklendi.'};
+        state.activeTab = 'liste';
+      }
+      await loadOrders(true);
+    }
+
+    else if(e.target.id==='mark-form'){
+      const f = e.target;
+      const o = state.modal.order;
+      const gercekAdet = parseInt(f.gercek_adet.value,10);
+      const { error } = await sb.from('siparisler').update({
+        status:'uretildi',
+        uretim_tarihi: f.uretim_tarihi.value,
+        gercek_adet: gercekAdet,
+        gercek_m3: calcM3(o.en,o.boy,o.kalinlik,gercekAdet),
+        uretim_notu: f.uretim_notu.value.trim(),
+        uretildi_tarihi: new Date().toISOString(),
+        uretildi_kullanici_id: state.user.id
+      }).eq('id', o.id);
+      state.toast = error ? {type:'err', text:'İşaretlenemedi: '+error.message} : {type:'ok', text:'Üretildi olarak işaretlendi.'};
+      state.modal = null;
+      await loadOrders(true);
+    }
+  });
+
+  init();
+})();
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(()=>{ /* sessiz geç, PWA çalışmaya devam eder */ });
+  });
+}
+
+</script>
+</body>
+</html>
