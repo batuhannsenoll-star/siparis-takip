@@ -1,6 +1,6 @@
 {
   "name": "siparis-takip",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Kontraplak Üretim - Sipariş Takip Masaüstü Uygulaması",
   "main": "main.js",
   "author": "Batuhan",
@@ -38,7 +38,8 @@
     "publish": {
       "provider": "github",
       "owner": "batuhannsenoll-star",
-      "repo": "siparis-takip"
+      "repo": "siparis-takip",
+      "releaseType": "release"
     }
   }
 }
