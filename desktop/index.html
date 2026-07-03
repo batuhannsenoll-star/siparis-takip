@@ -167,6 +167,7 @@
     gunlukUretimLoaded: false,
     tutkal: [],
     tutkalLoaded: false,
+    tumKullanicilar: [],
     ozetAy: new Date().toISOString().slice(0,7), // 'YYYY-MM'
     loading: true,
     modal: null,
@@ -267,6 +268,37 @@
     render();
   }
 
+  async function doChangePassword(mevcutSifre, yeniSifre){
+    const { error: dogrulamaErr } = await sb.auth.signInWithPassword({ email: state.profile.giris_epostasi, password: mevcutSifre });
+    if(dogrulamaErr){ return { error: 'Mevcut şifre hatalı.' }; }
+    const { error } = await sb.auth.updateUser({ password: yeniSifre });
+    if(error){ return { error: 'Şifre güncellenemedi: ' + error.message }; }
+    return { ok: true };
+  }
+
+  async function loadTumKullanicilar(){
+    const { data, error } = await sb.from('profiles').select('id,ad_soyad,rol').order('ad_soyad');
+    if(!error) state.tumKullanicilar = data || [];
+  }
+
+  async function adminSifreAta(hedefUserId, yeniSifre){
+    const { data: sess } = await sb.auth.getSession();
+    const token = sess && sess.session ? sess.session.access_token : null;
+    if(!token) return { error: 'Oturum bulunamadı.' };
+    try{
+      const res = await fetch(SUPABASE_URL + '/functions/v1/admin-sifre-ata', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ hedefUserId, yeniSifre })
+      });
+      const json = await res.json();
+      if(!res.ok) return { error: json.error || 'Şifre atanamadı.' };
+      return { ok: true };
+    }catch(e){
+      return { error: 'Sunucuya ulaşılamadı: ' + e.message };
+    }
+  }
+
   // ---------- Data ----------
   async function loadOrders(silent){
     if(!silent){ state.loading = true; render(); }
@@ -344,6 +376,8 @@
             <div class="modul-btn ${state.modul==='uretim'?'active':''}" data-action="modul" data-modul="uretim">Üretim</div>
           </div>` : ''}
           <div class="role-badge ${rol}"><span class="dot"></span>${escapeHtml(state.profile?state.profile.ad_soyad:'')} · ${ROL_ADLARI[rol]||rol}</div>
+          ${rol==='admin' ? `<button class="switch-btn" data-action="kullanicilar">Kullanıcılar</button>` : ''}
+          <button class="switch-btn" data-action="sifre-degistir">Şifremi Değiştir</button>
           <button class="switch-btn" data-action="logout">Çıkış Yap</button>
         </div>
       </header>
@@ -397,16 +431,17 @@
 
   function rowHtml(o,rol){
     const editedBadge = o.updated_at && o.updated_at !== o.created_at ? `<div class="hint" style="margin-top:2px;">düzenlendi: ${fmtDate(o.updated_at)}</div>` : '';
+    const silBtn = rol==='admin' ? ` <button class="row-btn ghost" data-action="siparis-sil" data-id="${o.id}">Sil</button>` : '';
     let actionBtn = '';
     if(o.status==='bekliyor'){
       if(rol==='patron'){ actionBtn = ''; }
       else if(rol==='admin'){
-        actionBtn = `<button class="row-btn" data-action="edit" data-id="${o.id}">Düzenle</button> <button class="row-btn primary" data-action="mark" data-id="${o.id}">Üretildi işaretle</button>`;
+        actionBtn = `<button class="row-btn" data-action="edit" data-id="${o.id}">Düzenle</button> <button class="row-btn primary" data-action="mark" data-id="${o.id}">Üretildi işaretle</button>${silBtn}`;
       }
       else if(rol==='satis' && o.sorumlu_id===state.user.id){ actionBtn = `<button class="row-btn" data-action="edit" data-id="${o.id}">Düzenle</button>`; }
       else if(canEdit(rol)){ actionBtn = `<button class="row-btn primary" data-action="mark" data-id="${o.id}">Üretildi işaretle</button>`; }
     }else{
-      actionBtn = `<button class="row-btn ghost" data-action="detail" data-id="${o.id}">Detay</button>`;
+      actionBtn = `<button class="row-btn ghost" data-action="detail" data-id="${o.id}">Detay</button>${silBtn}`;
     }
     let stageCell = '—';
     if(o.status==='bekliyor'){
@@ -593,6 +628,13 @@
       kayitlar.forEach(r => { const k = keyFn(r) || '—'; m[k] = (m[k]||0) + (r.m3||0); });
       return m;
     };
+    const kalinlikBazli = {};
+    kayitlar.forEach(r => {
+      const k = (r.kalinlik!=null ? r.kalinlik+' mm' : '—');
+      if(!kalinlikBazli[k]) kalinlikBazli[k] = { adet:0, m3:0 };
+      kalinlikBazli[k].adet += (r.adet||0);
+      kalinlikBazli[k].m3 += (r.m3||0);
+    });
     return {
       kayitSayisi: kayitlar.length,
       uretimGunu: gunler.size,
@@ -602,7 +644,8 @@
       makineBazli: grupla(r=>r.makine),
       cinsBazli: grupla(r=>r.cins),
       vardiyaBazli: grupla(r=>'Vardiya '+r.vardiya),
-      ustaBazli: grupla(r=>r.usta)
+      ustaBazli: grupla(r=>r.usta),
+      kalinlikBazli
     };
   }
 
@@ -633,21 +676,64 @@
 
   function renderGunlukKayitlar(kayitlar, rol){
     if(kayitlar.length===0) return `<div class="card"><div class="empty"><b>Kayıt yok</b>Henüz üretim kaydı girilmemiş.</div></div>`;
-    return `<div class="card">
+
+    // Tarihe göre grupla (kayitlar zaten tarih+vardiya azalan sırada)
+    const gunler = {};
+    const gunSirasi = [];
+    kayitlar.forEach(r => {
+      if(!gunler[r.tarih]){ gunler[r.tarih] = {}; gunSirasi.push(r.tarih); }
+      if(!gunler[r.tarih][r.vardiya]) gunler[r.tarih][r.vardiya] = [];
+      gunler[r.tarih][r.vardiya].push(r);
+    });
+
+    return gunSirasi.map(tarih => {
+      const vardiyalar = gunler[tarih];
+      const vardiyaNolar = Object.keys(vardiyalar).map(Number).sort((a,b)=>a-b);
+      let gunAdet = 0, gunM3 = 0;
+
+      const vardiyaBloklari = vardiyaNolar.map(vNo => {
+        const satirlar = vardiyalar[vNo];
+        const vAdet = satirlar.reduce((s,r)=>s+(r.adet||0),0);
+        const vM3 = satirlar.reduce((s,r)=>s+(r.m3||0),0);
+        gunAdet += vAdet; gunM3 += vM3;
+        const usta = satirlar.find(r=>r.usta)?.usta;
+        return `
+          <tr style="background:#FAF9F6;"><td colspan="8" style="font-weight:600;font-size:12px;color:var(--muted);">Vardiya ${vNo}${usta?' · '+escapeHtml(usta):''}</td></tr>
+          ${satirlar.map(r=>`<tr>
+            <td></td>
+            <td>${escapeHtml(r.makine)}</td>
+            <td>${escapeHtml(r.cins)}</td>
+            <td class="mono">${r.boy||'—'}×${r.en||'—'}×${r.kalinlik||'—'}</td>
+            <td class="mono">${r.adet}</td>
+            <td class="mono">${r.fire_adet||0}</td>
+            <td class="mono">${(r.m3||0).toFixed(3)}</td>
+            <td>${canEdit(rol) ? `<button class="row-btn" data-action="uretim-duzenle" data-id="${r.id}">Düzenle</button>${rol==='admin'?` <button class="row-btn ghost" data-action="uretim-sil" data-id="${r.id}">Sil</button>`:''}` : ''}</td>
+          </tr>`).join('')}
+          <tr style="background:#FAF9F6;"><td colspan="4" style="text-align:right;font-size:12px;color:var(--muted);">Vardiya ${vNo} toplam:</td><td class="mono" style="font-weight:600;">${vAdet}</td><td></td><td class="mono" style="font-weight:600;">${vM3.toFixed(3)}</td><td></td></tr>
+        `;
+      }).join('');
+
+      return `<div class="card" style="margin-bottom:14px;">
+        <table>
+          <thead><tr><th style="width:1%;"></th><th>Makine</th><th>Cins</th><th>Ölçü</th><th>Adet</th><th>Fire</th><th>m³</th><th></th></tr></thead>
+          <tbody>
+            <tr><td colspan="8" style="font-weight:700;font-size:13px;background:#F1EFE8;">${fmtDate(tarih)}</td></tr>
+            ${vardiyaBloklari}
+            <tr><td colspan="4" style="text-align:right;font-weight:700;">Gün toplamı:</td><td class="mono" style="font-weight:700;">${gunAdet}</td><td></td><td class="mono" style="font-weight:700;">${gunM3.toFixed(3)}</td><td></td></tr>
+          </tbody>
+        </table>
+      </div>`;
+    }).join('');
+  }
+
+  function renderKalinlikTablosu(obj){
+    const girdiler = Object.entries(obj).sort((a,b)=>b[1].adet-a[1].adet);
+    if(girdiler.length===0) return '';
+    return `<div class="card" style="padding:16px;">
+      <h3 style="font-size:14px;margin-bottom:10px;">Kalınlık Bazlı Üretim</h3>
       <table>
-        <thead><tr><th>Tarih</th><th>Vardiya</th><th>Usta</th><th>Makine</th><th>Cins</th><th>Ölçü</th><th>Adet</th><th>Fire</th><th>m³</th><th></th></tr></thead>
-        <tbody>${kayitlar.map(r=>`<tr>
-          <td>${fmtDate(r.tarih)}</td>
-          <td class="mono">${r.vardiya}</td>
-          <td>${escapeHtml(r.usta||'—')}</td>
-          <td>${escapeHtml(r.makine)}</td>
-          <td>${escapeHtml(r.cins)}</td>
-          <td class="mono">${r.boy||'—'}×${r.en||'—'}×${r.kalinlik||'—'}</td>
-          <td class="mono">${r.adet}</td>
-          <td class="mono">${r.fire_adet||0}</td>
-          <td class="mono">${(r.m3||0).toFixed(3)}</td>
-          <td>${canEdit(rol) ? `<button class="row-btn" data-action="uretim-duzenle" data-id="${r.id}">Düzenle</button>` : ''}</td>
-        </tr>`).join('')}</tbody>
+        <thead><tr><th>Kalınlık</th><th>Adet</th><th>m³</th></tr></thead>
+        <tbody>${girdiler.map(([k,v])=>`<tr><td>${escapeHtml(k)}</td><td class="mono">${v.adet}</td><td class="mono">${v.m3.toFixed(3)}</td></tr>`).join('')}</tbody>
       </table>
     </div>`;
   }
@@ -674,6 +760,9 @@
         ${renderKirilimTablosu('Cins Bazlı (m³)', o.cinsBazli)}
         ${renderKirilimTablosu('Vardiya Bazlı (m³)', o.vardiyaBazli)}
         ${renderKirilimTablosu('Usta Bazlı (m³)', o.ustaBazli)}
+      </div>
+      <div style="margin-top:16px;max-width:420px;">
+        ${renderKalinlikTablosu(o.kalinlikBazli)}
       </div>
     `;
   }
@@ -764,7 +853,7 @@
             <td class="mono">${r.eklenen||0}</td>
             <td class="mono">${r.harcanan}</td>
             <td class="mono">${r.kalan}</td>
-            <td>${canEdit(rol) ? `<button class="row-btn" data-action="tutkal-duzenle" data-id="${r.id}">Düzenle</button>` : ''}</td>
+            <td>${canEdit(rol) ? `<button class="row-btn" data-action="tutkal-duzenle" data-id="${r.id}">Düzenle</button>` : ''}${rol==='admin' ? ` <button class="row-btn ghost" data-action="tutkal-sil" data-id="${r.id}">Sil</button>` : ''}</td>
           </tr>`).join('')}</tbody>
         </table>
       </div>`}
@@ -936,6 +1025,55 @@
         </div>
       </div></div>`;
     }
+    if(m.type==='sifre-degistir'){
+      return `<div class="overlay" data-action="overlay-close"><div class="modal">
+        <div class="modal-head"><h3>Şifremi Değiştir</h3><button class="close-x" data-action="close-modal">×</button></div>
+        <div class="modal-body">
+          <form id="sifre-degistir-form">
+            <div class="form-grid">
+              <div class="field full"><label>Mevcut Şifre</label><input type="password" name="mevcut" required></div>
+              <div class="field full"><label>Yeni Şifre</label><input type="password" name="yeni" required minlength="6"></div>
+              <div class="field full"><label>Yeni Şifre (Tekrar)</label><input type="password" name="yeniTekrar" required minlength="6"></div>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn primary">Değiştir</button>
+              <button type="button" class="btn" data-action="close-modal">Vazgeç</button>
+            </div>
+          </form>
+        </div>
+      </div></div>`;
+    }
+    if(m.type==='kullanicilar'){
+      return `<div class="overlay" data-action="overlay-close"><div class="modal">
+        <div class="modal-head"><h3>Kullanıcılar</h3><button class="close-x" data-action="close-modal">×</button></div>
+        <div class="modal-body">
+          ${state.tumKullanicilar.length===0 ? `<p class="hint">Yükleniyor…</p>` : state.tumKullanicilar.map(u=>`
+            <div class="meta-row">
+              <span>${escapeHtml(u.ad_soyad)} <span class="hint">(${ROL_ADLARI[u.rol]||u.rol})</span></span>
+              <button class="row-btn" data-action="sifre-ata-ac" data-id="${u.id}" data-ad="${escapeHtml(u.ad_soyad)}">Şifre Belirle</button>
+            </div>
+          `).join('')}
+        </div>
+        <div class="modal-foot"><button class="btn" data-action="close-modal">Kapat</button></div>
+      </div></div>`;
+    }
+    if(m.type==='sifre-ata'){
+      return `<div class="overlay" data-action="overlay-close"><div class="modal">
+        <div class="modal-head"><h3>${escapeHtml(m.hedefAd)} — Yeni Şifre</h3><button class="close-x" data-action="close-modal">×</button></div>
+        <div class="modal-body">
+          <p class="hint" style="margin-bottom:12px;">Bu kişinin eski şifresini görmüyorsun, sadece yeni bir tane belirleyebiliyorsun.</p>
+          <form id="sifre-ata-form" data-hedef="${m.hedefId}">
+            <div class="form-grid">
+              <div class="field full"><label>Yeni Şifre</label><input type="password" name="yeni" required minlength="6"></div>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn primary">Şifreyi Ata</button>
+              <button type="button" class="btn" data-action="close-modal">Vazgeç</button>
+            </div>
+          </form>
+        </div>
+      </div></div>`;
+    }
     return '';
   }
 
@@ -967,6 +1105,9 @@
     if(!t){ if(e.target.classList.contains('overlay')){ state.modal=null; render(); } return; }
     const action = t.dataset.action;
     if(action==='logout'){ doLogout(); }
+    else if(action==='sifre-degistir'){ state.modal = { type:'sifre-degistir' }; render(); }
+    else if(action==='kullanicilar'){ loadTumKullanicilar().then(render); state.modal = { type:'kullanicilar' }; render(); }
+    else if(action==='sifre-ata-ac'){ state.modal = { type:'sifre-ata', hedefId: t.dataset.id, hedefAd: t.dataset.ad }; render(); }
     else if(action==='modul'){
       state.modul = t.dataset.modul; state.activeTab = defaultTab(state.modul); state.toast=null;
       if(state.activeTab==='uretim_takip' && !state.gunlukUretimLoaded){ loadGunlukUretim(); }
@@ -991,6 +1132,30 @@
     else if(action==='uretim-duzenle'){ const r = state.gunlukUretim.find(x=>x.id===t.dataset.id); state.modal = { type:'uretim-kaydi', kayit:r }; render(); }
     else if(action==='tutkal-ekle'){ state.modal = { type:'tutkal-kaydi', kayit:null }; render(); }
     else if(action==='tutkal-duzenle'){ const r = state.tutkal.find(x=>x.id===t.dataset.id); state.modal = { type:'tutkal-kaydi', kayit:r }; render(); }
+    else if(action==='siparis-sil'){
+      if(confirm('Bu siparişi kalıcı olarak silmek istediğine emin misin?')){
+        sb.from('siparisler').delete().eq('id', t.dataset.id).then(({error})=>{
+          state.toast = error ? {type:'err', text:'Silinemedi: '+error.message} : {type:'ok', text:'Sipariş silindi.'};
+          loadOrders(true);
+        });
+      }
+    }
+    else if(action==='uretim-sil'){
+      if(confirm('Bu üretim kaydını kalıcı olarak silmek istediğine emin misin?')){
+        sb.from('gunluk_uretim').delete().eq('id', t.dataset.id).then(({error})=>{
+          state.toast = error ? {type:'err', text:'Silinemedi: '+error.message} : {type:'ok', text:'Üretim kaydı silindi.'};
+          loadGunlukUretim(true);
+        });
+      }
+    }
+    else if(action==='tutkal-sil'){
+      if(confirm('Bu tutkal kaydını kalıcı olarak silmek istediğine emin misin?')){
+        sb.from('tutkal_takip').delete().eq('id', t.dataset.id).then(({error})=>{
+          state.toast = error ? {type:'err', text:'Silinemedi: '+error.message} : {type:'ok', text:'Tutkal kaydı silindi.'};
+          loadTutkal(true);
+        });
+      }
+    }
     else if(action==='close-modal' || action==='cancel-edit'){ state.modal=null; render(); }
   });
 
@@ -1172,6 +1337,27 @@
       state.toast = error ? {type:'err', text:'Kaydedilemedi: '+error.message} : {type:'ok', text:'Tutkal kaydı kaydedildi.'};
       state.modal = null;
       await loadTutkal(true);
+    }
+
+    else if(e.target.id==='sifre-degistir-form'){
+      const f = e.target;
+      if(f.yeni.value !== f.yeniTekrar.value){
+        state.toast = {type:'err', text:'Yeni şifreler birbiriyle eşleşmiyor.'};
+        render(); return;
+      }
+      const sonuc = await doChangePassword(f.mevcut.value, f.yeni.value);
+      state.toast = sonuc.error ? {type:'err', text:sonuc.error} : {type:'ok', text:'Şifren güncellendi.'};
+      state.modal = null;
+      render();
+    }
+
+    else if(e.target.id==='sifre-ata-form'){
+      const f = e.target;
+      const hedefId = f.dataset.hedef;
+      const sonuc = await adminSifreAta(hedefId, f.yeni.value);
+      state.toast = sonuc.error ? {type:'err', text:sonuc.error} : {type:'ok', text:'Şifre atandı.'};
+      state.modal = null;
+      render();
     }
   });
 
