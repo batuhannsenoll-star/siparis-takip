@@ -1,5 +1,6 @@
 const { app, BrowserWindow, dialog } = require('electron');
 const { autoUpdater } = require('electron-updater');
+const path = require('path');
 
 function createWindow () {
   const win = new BrowserWindow({
@@ -7,8 +8,9 @@ function createWindow () {
     height: 860,
     minWidth: 900,
     minHeight: 600,
-    title: 'Sipariş Takip',
-    backgroundColor: '#1E2124',
+    title: 'Anıl Orman Ürünleri — Sipariş Takip',
+    icon: path.join(__dirname, 'build', 'icon.ico'),
+    backgroundColor: '#3B5B58',
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false

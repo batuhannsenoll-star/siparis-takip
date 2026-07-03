@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sipariş Takip</title>
+<title>Anıl Orman Ürünleri — Sipariş Takip</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1E2124">
 <meta name="mobile-web-app-capable" content="yes">
@@ -52,6 +52,8 @@
   .gate-logo{color:var(--wood-3);letter-spacing:.06em;text-transform:uppercase;font-size:13px;font-weight:600;}
   .gate-title{color:#fff;font-size:32px;font-weight:700;text-align:center;}
   .gate-sub{color:#9aa0a6;font-size:14px;max-width:420px;text-align:center;line-height:1.5;margin-bottom:8px;}
+  .powered-by{color:#5f6a68;font-size:11px;letter-spacing:.04em;margin-top:22px;text-transform:uppercase;}
+  .app-footer{text-align:center;color:var(--muted);font-size:11px;letter-spacing:.03em;text-transform:uppercase;padding:18px 0 24px;}
   .auth-card{width:340px;background:var(--shell-2);border:1px solid #3a3f45;border-radius:var(--radius);padding:26px;color:#fff;}
   .auth-field{margin-bottom:12px;display:flex;flex-direction:column;gap:5px;}
   .auth-field label{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#9aa0a6;}
@@ -65,7 +67,8 @@
   .auth-hint{font-size:11px;color:#7c828a;margin-top:2px;}
 
   header{background:var(--shell);color:#fff;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
-  .brand{display:flex;flex-direction:column;gap:2px;}
+  .brand{display:flex;flex-direction:row;align-items:center;gap:12px;}
+  .brand-logo{width:36px;height:36px;border-radius:8px;}
   .brand .eyebrow{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--wood-3);font-weight:600;}
   .brand h1{font-size:20px;}
   .role-chip{display:flex;align-items:center;gap:10px;}
@@ -258,7 +261,7 @@
     state.authBusy = true; state.authError=''; render();
     const { data: eslesen, error: bulErr } = await sb.from('profiles')
       .select('giris_epostasi')
-      .ilike('ad_soyad', adSoyad.trim())
+      .ilike('kullanici_adi', adSoyad.trim())
       .maybeSingle();
     if(bulErr || !eslesen || !eslesen.giris_epostasi){
       state.authBusy = false; state.authError = 'Bu isimde bir kullanıcı bulunamadı.'; render(); return;
@@ -376,7 +379,7 @@
     app.innerHTML = `
       <div class="veneer"></div>
       <header>
-        <div class="brand"><div class="eyebrow">Kontraplak Üretim</div><h1>Sipariş Takip</h1></div>
+        <div class="brand"><img src="icons/anil-logo.png" alt="Anıl Orman Ürünleri" class="brand-logo"><h1>Sipariş Takip</h1></div>
         <div class="role-chip">
           ${mods.length>1 ? `
           <div class="modul-switch">
@@ -396,6 +399,7 @@
         ${state.toast ? `<div class="msg ${state.toast.type==='ok'?'ok':'err'}">${escapeHtml(state.toast.text)}</div>` : ''}
         ${state.loading ? `<div class="loading">Yükleniyor…</div>` : renderActiveTab(rol, orders,bekleyen,uretilen,bekleyenM3,list)}
       </main>
+      <div class="app-footer">Akış altyapısı ile çalışır</div>
       ${state.modal ? renderModal(rol) : ''}
     `;
   }
@@ -1090,7 +1094,7 @@
     app.innerHTML = `
       <div class="veneer"></div>
       <div class="gate">
-        <div class="gate-logo">Kontraplak Üretim</div>
+        <img src="icons/anil-logo.png" alt="Anıl Orman Ürünleri" style="width:100px;height:100px;border-radius:18px;margin-bottom:4px;box-shadow:0 8px 24px rgba(0,0,0,.35);">
         <div class="gate-title">Sipariş Takip</div>
         <div class="gate-sub">Satışçılar sipariş girer, üretim tamamlandığında burada güncellenir ve otomatik arşivlenir.</div>
         <div class="auth-card">
@@ -1103,6 +1107,7 @@
           ${state.authOk ? `<div class="auth-ok">${escapeHtml(state.authOk)}</div>` : ''}
           <div class="auth-hint" style="margin-top:14px;text-align:center;">Hesabın yok mu? Yöneticinden (Batuhan) e-posta ve şifre iste.</div>
         </div>
+        <div class="powered-by">Akış altyapısı ile çalışır</div>
       </div>
     `;
   }

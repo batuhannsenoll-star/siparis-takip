@@ -1,12 +1,12 @@
 {
-  "name": "Sipariş Takip",
-  "short_name": "Sipariş Takip",
-  "description": "Kontraplak üretim sipariş takip uygulaması",
+  "name": "Anıl Orman Ürünleri — Sipariş Takip",
+  "short_name": "Anıl Sipariş Takip",
+  "description": "Anıl Orman Ürünleri sipariş ve üretim takip uygulaması",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#1E2124",
-  "theme_color": "#1E2124",
+  "background_color": "#3B5B58",
+  "theme_color": "#3B5B58",
   "orientation": "any",
   "icons": [
     { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
