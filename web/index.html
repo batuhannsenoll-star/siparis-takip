@@ -411,7 +411,7 @@
     return list.slice().sort((a,b)=> new Date(b.created_at) - new Date(a.created_at));
   }
 
-  const MODUL_ADLARI = { satis:'Satış', uretim:'Üretim', tedarik:'Tedarik' };
+  const MODUL_ADLARI = { satis:'Satış', uretim:'Üretim', tedarik:'Satın Alma' };
   const ROL_ADLARI = { satis:'Satış', vardiya_amiri:'Vardiya Amiri', admin:'Admin', patron:'Patron', satin_alma:'Satın Alma' };
   const MODUL_SEKMELERI = {
     satis: [ {key:'giris', label:'Sipariş Giriş', roller:['satis','admin']}, {key:'takip', label:'Sipariş Takip', roller:['satis','admin','patron']} ],
@@ -419,14 +419,15 @@
       {key:'uretim_takip', label:'Üretim Takip', roller:['vardiya_amiri','admin','patron']},
       {key:'liste', label:'Mevcut Siparişler', roller:['vardiya_amiri','admin','patron']},
       {key:'tutkal', label:'Tutkal Takip', roller:['vardiya_amiri','admin','patron']},
-      {key:'hat', label:'Kapasite Raporu', roller:['vardiya_amiri','admin','patron']}
+      {key:'hat', label:'Kapasite Raporu', roller:['vardiya_amiri','admin','patron']},
+      {key:'soyma_ciktisi', label:'Soyma Çıktısı', roller:['vardiya_amiri','admin','patron']},
+      {key:'uretim_planlama', label:'Üretim Planlama', roller:['vardiya_amiri','admin','patron']},
+      {key:'receteler', label:'Reçeteler', roller:['admin']}
     ],
     tedarik: [
       {key:'kantar', label:'Kantar', roller:['satin_alma','admin','patron']},
       {key:'tomruk_sahasi', label:'Tomruk Sahası', roller:['satin_alma','vardiya_amiri','admin','patron']},
-      {key:'soyma_ciktisi', label:'Soyma Çıktısı', roller:['vardiya_amiri','admin','patron']},
-      {key:'uretim_planlama', label:'Üretim Planlama', roller:['vardiya_amiri','admin','patron','satin_alma']},
-      {key:'receteler', label:'Reçeteler', roller:['admin']}
+      {key:'kalan_tutkal', label:'Kalan Tutkal', roller:['satin_alma','admin','patron']}
     ]
   };
   function canEdit(rol){ return rol==='admin' || rol==='vardiya_amiri'; }
@@ -484,6 +485,7 @@
       case 'uretim_takip': return renderUretimTakipTab(rol);
       case 'tutkal': return renderTutkalTab(rol);
       case 'kantar': return renderKantarTab(rol);
+      case 'kalan_tutkal': return renderKalanTutkalTab(rol);
       case 'tomruk_sahasi': return renderTomrukSahasiTab(rol);
       case 'soyma_ciktisi': return renderSoymaCiktisiTab(rol);
       case 'uretim_planlama': return renderUretimPlanlamaTab(rol);
@@ -1058,6 +1060,22 @@
     return { stok, ihtiyac, eksikRecete, kacGun, oneri };
   }
 
+  function renderKalanTutkalTab(rol){
+    const kayitlar = state.tutkal.slice().sort((a,b)=> (b.tarih+b.vardiya).localeCompare(a.tarih+a.vardiya));
+    const son = kayitlar[0];
+    return `
+      <div class="summary">
+        <div class="stat"><div class="num">${son ? Number(son.kalan||0).toFixed(0) : '—'}</div><div class="label">Kalan Tutkal Stoğu</div></div>
+        <div class="stat"><div class="num">${son ? fmtDate(son.tarih) : '—'}</div><div class="label">Son Kayıt Tarihi</div></div>
+        <div class="stat"><div class="num">${son ? (son.vardiya||'—') : '—'}</div><div class="label">Son Vardiya</div></div>
+      </div>
+      ${!son ? `<div class="card"><div class="empty"><b>Kayıt yok</b>Henüz Tutkal Takip'e (Üretim modülü) hiç kayıt girilmemiş.</div></div>` : `
+      <p class="hint" style="margin-top:14px;">Bu rakam, Üretim modülündeki Tutkal Takip ekranına en son girilen vardiya kaydından otomatik alınır. Detaylı günlük/aylık takip için Üretim → Tutkal Takip ekranını kullanın.</p>
+      `}
+    `;
+  }
+
+
   function renderKantarTab(rol){
     const kayitlar = state.kantarGirisleri.slice().sort((a,b)=> b.tarih.localeCompare(a.tarih));
     return `
@@ -1542,6 +1560,7 @@
       if(state.activeTab==='uretim_takip' && !state.gunlukUretimLoaded){ loadGunlukUretim(); }
       if(state.activeTab==='tutkal' && !state.tutkalLoaded){ loadTutkal(); }
       if(state.activeTab==='tutkal' && !state.gunlukUretimLoaded){ loadGunlukUretim(true); }
+      if(state.activeTab==='kalan_tutkal' && !state.tutkalLoaded){ loadTutkal(true); }
       if(['kantar','tomruk_sahasi','soyma_ciktisi','uretim_planlama','receteler'].includes(state.activeTab)){
         if(!state.kantarLoaded) loadKantar(true);
         if(!state.soymaLoaded) loadSoyma(true);
