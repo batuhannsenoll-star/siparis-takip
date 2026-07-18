@@ -47,7 +47,7 @@
   button{font-family:inherit;cursor:pointer;}
   input,select,textarea{font-family:inherit;}
 
-  .veneer{height:6px;width:100%;background:repeating-linear-gradient(90deg,var(--wood-1) 0 40px, var(--wood-2) 40px 44px,var(--wood-4) 44px 84px, var(--wood-3) 84px 88px,var(--wood-5) 88px 128px, var(--wood-2) 128px 132px);opacity:.9;}
+  .veneer{display:none;}
 
   .gate{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--shell);gap:20px;padding:24px;}
   .gate-logo{color:var(--wood-3);letter-spacing:.06em;text-transform:uppercase;font-size:13px;font-weight:600;}
@@ -165,6 +165,10 @@
   const CINS_OPTIONS = ["Kavak/Kavak", "Kavak/Huş", "Kayın/Kayın"];
   const ASAMA_OPTIONS = ["Sırada", "Üretimde", "Ebatlamada", "Sevkiyatta"];
   const MAKINE_OPTIONS = ["Ç-K-P", "K-K-P"];
+  const USTA_OPTIONS = {
+    "Ç-K-P": ["Ahmet Tuncer", "Murat Türken", "Gökhan Pamuk"],
+    "K-K-P": ["Batuhan Ataman", "Zafer Hasanoğlu", "Tahsin Doğru"]
+  };
 
   let state = {
     user: null,
@@ -223,7 +227,7 @@
   function moduller(rol){
     let mods = [];
     if(rol==='satis') mods = ['satis'];
-    else if(rol==='vardiya_amiri') mods = ['uretim','tedarik'];
+    else if(rol==='vardiya_amiri') mods = ['uretim'];
     else if(rol==='satin_alma') mods = ['tedarik'];
     else if(rol==='admin' || rol==='patron') mods = ['satis','uretim','tedarik'];
     return mods.filter(m => AKTIF_MODULLER.includes(m));
@@ -426,7 +430,7 @@
     ],
     tedarik: [
       {key:'kantar', label:'Kantar', roller:['satin_alma','admin','patron']},
-      {key:'tomruk_sahasi', label:'Tomruk Sahası', roller:['satin_alma','vardiya_amiri','admin','patron']},
+      {key:'tomruk_sahasi', label:'Tomruk Sahası', roller:['satin_alma','admin','patron']},
       {key:'kalan_tutkal', label:'Kalan Tutkal', roller:['satin_alma','admin','patron']}
     ]
   };
@@ -452,7 +456,7 @@
     app.innerHTML = `
       <div class="veneer"></div>
       <header>
-        <div class="brand"><img src="${FIRMA_LOGO}" alt="${escapeHtml(FIRMA_ADI)}" class="brand-logo"><h1>Akış</h1></div>
+        <div class="brand"><img src="${FIRMA_LOGO}" alt="${escapeHtml(FIRMA_ADI)}" class="brand-logo"></div>
         <div class="role-chip">
           ${mods.length>1 ? `
           <div class="modul-switch">
@@ -786,7 +790,7 @@
         const vAdet = satirlar.reduce((s,r)=>s+(r.adet||0),0);
         const vM3 = satirlar.reduce((s,r)=>s+(r.m3||0),0);
         gunAdet += vAdet; gunM3 += vM3;
-        const usta = satirlar.find(r=>r.usta)?.usta;
+        const usta = satirlar.find(r=>r.makine==='Ç-K-P' && r.usta)?.usta || satirlar.find(r=>r.usta)?.usta;
         return `
           <tr style="background:#FAF9F6;"><td colspan="8" style="font-weight:600;font-size:12px;color:var(--muted);">Vardiya ${vNo}${usta?' · '+escapeHtml(usta):''}</td></tr>
           ${satirlar.map(r=>`<tr>
@@ -1297,21 +1301,36 @@
     if(m.type==='uretim-kaydi'){
       const r = m.kayit || {};
       const isEdit = !!m.kayit;
+      const varsayilanTarih = r.tarih || m.onTarih || todayStr();
+      const varsayilanVardiya = r.vardiya || m.onVardiya || null;
+      const makineVal = r.makine || MAKINE_OPTIONS[0];
+      const ustaListesi = USTA_OPTIONS[makineVal] || [];
+      const ustaEslesiyor = r.usta && ustaListesi.includes(r.usta);
+      const ustaSeciliDeger = r.usta ? (ustaEslesiyor ? r.usta : '__diger__') : '';
+      const digerBaslangic = (r.usta && !ustaEslesiyor) ? r.usta : '';
+      const digerGorunur = ustaSeciliDeger === '__diger__';
       return `<div class="overlay" data-action="overlay-close"><div class="modal">
         <div class="modal-head"><h3>${isEdit?'Üretim Kaydını Düzenle':'Yeni Üretim Kaydı'}</h3><button class="close-x" data-action="close-modal">×</button></div>
         <div class="modal-body">
           <form id="uretim-kaydi-form">
             <div class="form-grid">
-              <div class="field"><label>Tarih</label><input type="date" name="tarih" required value="${r.tarih||todayStr()}"></div>
+              <div class="field"><label>Tarih</label><input type="date" name="tarih" required value="${varsayilanTarih}"></div>
               <div class="field"><label>Vardiya</label><select name="vardiya">
-                <option value="1" ${r.vardiya===1?'selected':''}>1</option>
-                <option value="2" ${r.vardiya===2?'selected':''}>2</option>
-                <option value="3" ${r.vardiya===3?'selected':''}>3</option>
+                <option value="1" ${varsayilanVardiya===1?'selected':''}>1</option>
+                <option value="2" ${varsayilanVardiya===2?'selected':''}>2</option>
+                <option value="3" ${varsayilanVardiya===3?'selected':''}>3</option>
               </select></div>
-              <div class="field full"><label>Usta</label><input type="text" name="usta" value="${escapeHtml(r.usta||'')}" placeholder="o vardiyada çalışan usta"></div>
-              <div class="field"><label>Makine</label><select name="makine">
-                ${MAKINE_OPTIONS.map(mo=>`<option value="${mo}" ${r.makine===mo?'selected':''}>${mo}</option>`).join('')}
+              <div class="field"><label>Makine</label><select name="makine" id="uk-makine-select">
+                ${MAKINE_OPTIONS.map(mo=>`<option value="${mo}" ${makineVal===mo?'selected':''}>${mo}</option>`).join('')}
               </select></div>
+              <div class="field full"><label>Usta</label>
+                <select name="usta_secim" id="uk-usta-select">
+                  <option value="">— seçiniz —</option>
+                  ${ustaListesi.map(u=>`<option value="${escapeHtml(u)}" ${ustaSeciliDeger===u?'selected':''}>${escapeHtml(u)}</option>`).join('')}
+                  <option value="__diger__" ${ustaSeciliDeger==='__diger__'?'selected':''}>Diğer</option>
+                </select>
+                <input type="text" name="usta_diger" id="uk-usta-diger" placeholder="Usta adını yazın" value="${escapeHtml(digerBaslangic)}" style="margin-top:6px;${digerGorunur?'':'display:none;'}">
+              </div>
               <div class="field"><label>Cins</label><select name="cins">
                 ${CINS_OPTIONS.map(c=>`<option value="${escapeHtml(c)}" ${r.cins===c?'selected':''}>${escapeHtml(c)}</option>`).join('')}
               </select></div>
@@ -1323,7 +1342,8 @@
               <div class="field readout"><label>m³ (otomatik)</label><input type="text" id="uk-m3-readout" readonly value="${(r.m3||0).toFixed(3)}"></div>
             </div>
             <div class="form-actions">
-              <button type="submit" class="btn primary">Kaydet</button>
+              ${!isEdit ? `<button type="submit" name="_devam" value="1" class="btn primary">Kaydet ve Yeni Ekle</button>` : ''}
+              <button type="submit" class="btn ${isEdit?'primary':''}">${isEdit?'Kaydet':'Kaydet ve Kapat'}</button>
               <button type="button" class="btn" data-action="close-modal">Vazgeç</button>
             </div>
           </form>
@@ -1694,6 +1714,23 @@
       const ev = new Event('input', {bubbles:true});
       form.adet_palet.dispatchEvent(ev);
     }
+    if(e.target.matches('#uk-makine-select')){
+      const form = e.target.closest('#uretim-kaydi-form');
+      const liste = USTA_OPTIONS[e.target.value] || [];
+      const sel = form.querySelector('#uk-usta-select');
+      sel.innerHTML = '<option value="">— seçiniz —</option>'
+        + liste.map(u=>`<option value="${escapeHtml(u)}">${escapeHtml(u)}</option>`).join('')
+        + '<option value="__diger__">Diğer</option>';
+      const digerInput = form.querySelector('#uk-usta-diger');
+      digerInput.value = '';
+      digerInput.style.display = 'none';
+    }
+    if(e.target.matches('#uk-usta-select')){
+      const form = e.target.closest('#uretim-kaydi-form');
+      const digerInput = form.querySelector('#uk-usta-diger');
+      if(e.target.value==='__diger__'){ digerInput.style.display=''; digerInput.focus(); }
+      else { digerInput.style.display='none'; digerInput.value=''; }
+    }
     if(e.target.matches('[data-action="update-stage"]')){
       const id = e.target.dataset.id;
       const { error } = await sb.from('siparisler').update({ asama: e.target.value }).eq('id', id);
@@ -1779,10 +1816,13 @@
 
     else if(e.target.id==='uretim-kaydi-form'){
       const f = e.target;
+      const devamEt = e.submitter && e.submitter.name === '_devam';
+      const ustaSecim = f.usta_secim.value;
+      const usta = ustaSecim==='__diger__' ? (f.usta_diger.value.trim() || null) : (ustaSecim || null);
       const data = {
         tarih: f.tarih.value,
         vardiya: parseInt(f.vardiya.value,10),
-        usta: f.usta.value.trim() || null,
+        usta: usta,
         makine: f.makine.value,
         cins: f.cins.value,
         boy: f.boy.value?parseFloat(f.boy.value):null,
@@ -1798,8 +1838,16 @@
       }else{
         ({ error } = await sb.from('gunluk_uretim').insert([Object.assign({}, data, { created_by: state.user.id })]));
       }
-      state.toast = error ? {type:'err', text:'Kaydedilemedi: '+error.message} : {type:'ok', text:'Üretim kaydı kaydedildi.'};
-      state.modal = null;
+      if(error){
+        state.toast = {type:'err', text:'Kaydedilemedi: '+error.message};
+      }else{
+        state.toast = {type:'ok', text:'Üretim kaydı kaydedildi.'};
+        if(devamEt && !state.modal.kayit){
+          state.modal = { type:'uretim-kaydi', kayit:null, onTarih:data.tarih, onVardiya:data.vardiya };
+        }else{
+          state.modal = null;
+        }
+      }
       await loadGunlukUretim(true);
     }
 
