@@ -201,6 +201,7 @@
     zimparaFitil: [], zimparaLoaded: false,
     cizimler: [], cizimlerLoaded: false, cizimYukleniyor: false, cizimSearch: '',
     ozetAy: new Date().toISOString().slice(0,7), // 'YYYY-MM'
+    gunlukBaslangic: '', gunlukBitis: '',
     loading: true,
     modal: null,
     toast: null
@@ -537,6 +538,13 @@
     XLSX.writeFile(wb, filename + '_' + todayStr() + '.xlsx');
   }
 
+  function exportToExcelAoa(filename, aoa){
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Özet');
+    XLSX.writeFile(wb, filename + '_' + todayStr() + '.xlsx');
+  }
+
   function excelExportData(key){
     let header, rows, filename;
     if(key==='siparisler'){
@@ -546,7 +554,47 @@
     } else if(key==='gunluk_uretim'){
       filename = 'uretim_gunluk_kayitlar';
       header = ['Tarih','Vardiya','Usta','Makine','Cins','Boy','En','Kalınlık','Adet','Fire','m³'];
-      rows = state.gunlukUretim.map(r => [r.tarih, r.vardiya, r.usta||'', r.makine, r.cins, r.boy, r.en, r.kalinlik, r.adet, r.fire_adet||0, r.m3||0]);
+      rows = gunlukUretimFiltreli().map(r => [r.tarih, r.vardiya, r.usta||'', r.makine, r.cins, r.boy, r.en, r.kalinlik, r.adet, r.fire_adet||0, r.m3||0]);
+    } else if(key==='aylik_ozet'){
+      const ay = state.ozetAy;
+      const o = hesaplaOzet(ay);
+      filename = 'uretim_aylik_ozet_' + ay;
+      const aoa = [
+        ['Aylık Özet', ayAdi(ay)],
+        [],
+        ['Üretim Günü', o.uretimGunu],
+        ['Toplam Adet', o.toplamAdet],
+        ['Toplam m³', Math.round(o.toplamM3*1000)/1000],
+        ['Ort. Günlük m³', Math.round(o.ortGunM3*1000)/1000],
+        ['Fire Adet', o.fireAdet],
+        ['Fire m³', Math.round(o.fireM3*1000)/1000],
+        ['Fire Oranı (%)', Math.round(o.firePct*100)/100],
+        [],
+        ['Makine Bazlı (m³)'],
+        ...Object.entries(o.makineBazli).map(([k,v]) => [k, Math.round(v*1000)/1000]),
+        [],
+        ['Cins Bazlı (m³)'],
+        ...Object.entries(o.cinsBazli).map(([k,v]) => [k, Math.round(v*1000)/1000]),
+        [],
+        ['Vardiya Bazlı (m³)'],
+        ...Object.entries(o.vardiyaBazli).map(([k,v]) => [k, Math.round(v*1000)/1000]),
+        [],
+        ['Usta Bazlı (m³)'],
+        ...Object.entries(o.ustaBazli).map(([k,v]) => [k, Math.round(v*1000)/1000]),
+        [],
+        ['Kalınlık Bazlı'],
+        ['Kalınlık','Adet','m³'],
+        ...Object.entries(o.kalinlikBazli).map(([k,v]) => [k, v.adet, Math.round(v.m3*1000)/1000])
+      ];
+      if(o.kayitSayisi===0){ state.toast = {type:'err', text:'Aktarılacak veri yok.'}; render(); return; }
+      try{
+        exportToExcelAoa(filename, aoa);
+        state.toast = {type:'ok', text:'Excel dosyası indirildi.'};
+      }catch(e){
+        state.toast = {type:'err', text:'Excel oluşturulamadı: '+e.message};
+      }
+      render();
+      return;
     } else if(key==='tutkal'){
       filename = 'tutkal_takip';
       header = ['Tarih','Vardiya','Alt','Üst','Soğuk','K.U.','K.K.','İ.B.','M.G.','Eklenen','Harcanan','Kalan'];
@@ -964,6 +1012,17 @@
     return aylar[parseInt(m,10)-1] + ' ' + y;
   }
 
+  function gunlukUretimFiltreli(){
+    let kayitlar = state.gunlukUretim.slice();
+    if(state.gunlukBaslangic) kayitlar = kayitlar.filter(r => r.tarih >= state.gunlukBaslangic);
+    if(state.gunlukBitis) kayitlar = kayitlar.filter(r => r.tarih <= state.gunlukBitis);
+    return kayitlar.sort((a,b)=> (b.tarih+b.vardiya).localeCompare(a.tarih+a.vardiya));
+  }
+
+  function vardiyaRenk(vNo){
+    return { 1:'#FFF3E0', 2:'#E8F1FF', 3:'#F3EAFF' }[vNo] || '#F5F5F5';
+  }
+
   function hesaplaOzet(ay){
     const kayitlar = state.gunlukUretim.filter(r => r.tarih && r.tarih.slice(0,7)===ay);
     const toplamAdet = kayitlar.reduce((s,r)=>s+(r.adet||0),0);
@@ -1010,14 +1069,21 @@
     const istenenView = state.uretimTakipView || 'gunluk';
     const gorunumler = URETIM_TAKIP_ALT_GORUNUMLER.filter(v => !v.adminOnly || rol==='admin');
     const view = gorunumler.find(v=>v.key===istenenView) ? istenenView : 'gunluk';
-    const kayitlar = state.gunlukUretim.slice().sort((a,b)=> (b.tarih+b.vardiya).localeCompare(a.tarih+a.vardiya));
+    const kayitlar = gunlukUretimFiltreli();
     const ay = state.ozetAy;
     const ozet = hesaplaOzet(ay);
 
     const cipBar = `<div class="filters">
         ${gorunumler.map(v=>`<div class="chip ${view===v.key?'active':''}" data-action="ut-view" data-view="${v.key}">${v.label}</div>`).join('')}
+        ${view==='gunluk' ? `
+          <input type="date" value="${state.gunlukBaslangic}" data-action="gunluk-tarih-baslangic" title="Başlangıç tarihi" style="padding:6px 10px;border:1px solid var(--line);border-radius:6px;font-size:12px;">
+          <span class="hint">—</span>
+          <input type="date" value="${state.gunlukBitis}" data-action="gunluk-tarih-bitis" title="Bitiş tarihi" style="padding:6px 10px;border:1px solid var(--line);border-radius:6px;font-size:12px;">
+          ${(state.gunlukBaslangic || state.gunlukBitis) ? `<button class="row-btn" data-action="gunluk-tarih-temizle">Temizle</button>` : ''}
+        ` : ''}
         ${view==='gunluk' ? `<button class="row-btn" data-action="excel-export" data-export="gunluk_uretim" style="margin-left:auto;">Excel'e Aktar</button>` : ''}
         ${view==='gunluk' && canEdit(rol) ? `<button class="row-btn primary" data-action="uretim-ekle">+ Yeni Kayıt</button>` : ''}
+        ${view==='ozet' ? `<button class="row-btn" data-action="excel-export" data-export="aylik_ozet" style="margin-left:auto;">Excel'e Aktar</button>` : ''}
       </div>`;
 
     let icerik;
@@ -1033,7 +1099,7 @@
   }
 
   function renderGunlukKayitlar(kayitlar, rol){
-    if(kayitlar.length===0) return `<div class="card"><div class="empty"><b>Kayıt yok</b>Henüz üretim kaydı girilmemiş.</div></div>`;
+    if(kayitlar.length===0) return `<div class="card"><div class="empty"><b>Kayıt yok</b>${(state.gunlukBaslangic||state.gunlukBitis) ? 'Seçilen tarih aralığında kayıt bulunamadı.' : 'Henüz üretim kaydı girilmemiş.'}</div></div>`;
 
     // Tarihe göre grupla (kayitlar zaten tarih+vardiya azalan sırada)
     const gunler = {};
@@ -1056,8 +1122,8 @@
         gunAdet += vAdet; gunM3 += vM3;
         const usta = satirlar.find(r=>r.makine==='Ç-K-P' && r.usta)?.usta || satirlar.find(r=>r.usta)?.usta;
         return `
-          <tr style="background:#FAF9F6;"><td colspan="8" style="font-weight:600;font-size:12px;color:var(--muted);">Vardiya ${vNo}${usta?' · '+escapeHtml(usta):''}</td></tr>
-          ${satirlar.map(r=>`<tr>
+          <tr style="background:${vardiyaRenk(vNo)};border-top:2px solid var(--amber-dark);"><td colspan="8" style="font-weight:800;font-size:13px;padding:9px 12px;color:#3a3126;"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--amber-dark);margin-right:8px;vertical-align:middle;"></span>Vardiya ${vNo}${usta?' · '+escapeHtml(usta):''}</td></tr>
+          ${satirlar.map(r=>`<tr style="background:${vardiyaRenk(vNo)};">
             <td></td>
             <td>${escapeHtml(r.makine)}</td>
             <td>${escapeHtml(r.cins)}</td>
@@ -1067,17 +1133,17 @@
             <td class="mono">${(r.m3||0).toFixed(3)}</td>
             <td>${canEdit(rol) ? `<button class="row-btn" data-action="uretim-duzenle" data-id="${r.id}">Düzenle</button>${rol==='admin'?` <button class="row-btn ghost" data-action="uretim-sil" data-id="${r.id}">Sil</button>`:''}` : ''}</td>
           </tr>`).join('')}
-          <tr style="background:#FAF9F6;"><td colspan="4" style="text-align:right;font-size:12px;color:var(--muted);">Vardiya ${vNo} toplam:</td><td class="mono" style="font-weight:600;">${vAdet}</td><td></td><td class="mono" style="font-weight:600;">${vM3.toFixed(3)}</td><td></td></tr>
+          <tr style="background:${vardiyaRenk(vNo)};"><td colspan="4" style="text-align:right;font-size:12px;color:var(--muted);padding-bottom:10px;">Vardiya ${vNo} toplam:</td><td class="mono" style="font-weight:700;padding-bottom:10px;">${vAdet}</td><td></td><td class="mono" style="font-weight:700;padding-bottom:10px;">${vM3.toFixed(3)}</td><td></td></tr>
         `;
       }).join('');
 
-      return `<div class="card" style="margin-bottom:14px;">
+      return `<div class="card" style="margin-bottom:16px;overflow:hidden;">
         <table>
           <thead><tr><th style="width:1%;"></th><th>Makine</th><th>Cins</th><th>Ölçü</th><th>Adet</th><th>Fire</th><th>m³</th><th></th></tr></thead>
           <tbody>
-            <tr><td colspan="8" style="font-weight:700;font-size:13px;background:#F1EFE8;">${fmtDate(tarih)}</td></tr>
+            <tr><td colspan="8" style="font-weight:800;font-size:14px;background:var(--amber);color:#1c1f22;padding:11px 14px;letter-spacing:.2px;">${fmtDate(tarih)}</td></tr>
             ${vardiyaBloklari}
-            <tr><td colspan="4" style="text-align:right;font-weight:700;">Gün toplamı:</td><td class="mono" style="font-weight:700;">${gunAdet}</td><td></td><td class="mono" style="font-weight:700;">${gunM3.toFixed(3)}</td><td></td></tr>
+            <tr><td colspan="4" style="text-align:right;font-weight:700;padding-top:10px;">Gün toplamı:</td><td class="mono" style="font-weight:700;padding-top:10px;">${gunAdet}</td><td></td><td class="mono" style="font-weight:700;padding-top:10px;">${gunM3.toFixed(3)}</td><td></td></tr>
           </tbody>
         </table>
       </div>`;
@@ -1228,6 +1294,22 @@
   function gunSayisi(kayitlar, gunAlani){
     const gunler = new Set(kayitlar.map(r=>r[gunAlani]));
     return gunler.size || 1;
+  }
+
+  function tomrukHedefineGoreIhtiyacHesapla(){
+    const hedefM3 = ayar('hedef_gunluk_kontraplak_m3', 30);
+    const verimYuzde = ayar('soyma_verimi_yuzde', 55);
+    // Kontraplak, papel katmanlarının üst üste preslenmesiyle oluşur; hacimce yaklaşık 1:1 kabul edilir.
+    const papelGerekliGunluk = hedefM3;
+    const tomrukGerekliGunluk = papelGerekliGunluk / (verimYuzde/100);
+    return {
+      hedefM3,
+      verimYuzde,
+      papelGerekliGunluk,
+      tomrukGerekliGunluk,
+      tomrukGerekliHaftalik: tomrukGerekliGunluk*7,
+      tomrukGerekliAylik: tomrukGerekliGunluk*30
+    };
   }
 
   function tomrukSahasiHesapla(){
@@ -1612,12 +1694,30 @@
   function renderTomrukSahasiTab(rol){
     const hesap = tomrukSahasiHesapla();
     const kategoriler = Object.keys(hesap);
+    const toplamGunluk = kategoriler.reduce((s,k)=>s+(hesap[k].gunlukOrt||0),0);
+    const hedef = tomrukHedefineGoreIhtiyacHesapla();
     return `
       <p class="hint" style="margin-bottom:14px;">Ağırlık→hacim dönüşüm oranı: <b>${ayar('kavak_yogunluk_kg_m3',730)} kg/m³</b> · Soyma verimi: <b>%${ayar('soyma_verimi_yuzde',55)}</b> ${rol==='admin' ? `<button class="row-btn" data-action="ayarlar-duzenle" style="margin-left:8px;">Ayarları Düzenle</button>` : ''}</p>
+
+      <h3 style="font-size:14px;margin-bottom:8px;">Hedefe Göre Tomruk İhtiyacı</h3>
+      <p class="hint" style="margin-bottom:6px;">Günlük <b>${hedef.hedefM3.toFixed(1)} m³ kontraplak</b> üretim hedefine göre gereken tomruk miktarı ${rol==='admin' ? `<button class="row-btn" data-action="ayarlar-duzenle" style="margin-left:6px;padding:2px 10px;font-size:11px;">Hedefi Değiştir</button>` : ''}</p>
+      <div class="summary" style="margin-bottom:20px;">
+        <div class="stat"><div class="num">${hedef.tomrukGerekliGunluk.toFixed(2)}</div><div class="label">Günlük Gereken Tomruk (m³)</div></div>
+        <div class="stat"><div class="num">${hedef.tomrukGerekliHaftalik.toFixed(2)}</div><div class="label">Haftalık Gereken Tomruk (m³)</div></div>
+        <div class="stat"><div class="num">${hedef.tomrukGerekliAylik.toFixed(2)}</div><div class="label">Aylık Gereken Tomruk (m³)</div></div>
+      </div>
+
       ${kategoriler.length===0 ? `<div class="card"><div class="empty"><b>Veri yok</b>Henüz kantar/soyma kaydı yok.</div></div>` : `
+      <h3 style="font-size:14px;margin-bottom:8px;">Mevcut Tüketim Hızına Göre (Son 30 Gün Ortalaması)</h3>
+      <p class="hint" style="margin-bottom:6px;">Bu rakamlar hedef değil, geçmiş kayıtlara göre gerçekte ne kadar tüketildiğini gösterir.</p>
+      <div class="summary" style="margin-bottom:14px;">
+        <div class="stat"><div class="num">${toplamGunluk.toFixed(2)}</div><div class="label">Toplam Günlük Tüketim (m³)</div></div>
+        <div class="stat"><div class="num">${(toplamGunluk*7).toFixed(2)}</div><div class="label">Toplam Haftalık Tüketim (m³)</div></div>
+        <div class="stat"><div class="num">${(toplamGunluk*30).toFixed(2)}</div><div class="label">Toplam Aylık Tüketim (m³)</div></div>
+      </div>
       <div class="card">
         <table>
-          <thead><tr><th>Ölçü Kategorisi</th><th>Gelen (m³)</th><th>Tüketilen (m³)</th><th>Kalan (m³)</th><th>Günlük Ort.</th><th>Kaç Gün Yeter</th></tr></thead>
+          <thead><tr><th>Ölçü Kategorisi</th><th>Gelen (m³)</th><th>Tüketilen (m³)</th><th>Kalan (m³)</th><th>Günlük Ort.</th><th>Haftalık Ort.</th><th>Aylık Ort.</th><th>Kaç Gün Yeter</th></tr></thead>
           <tbody>${kategoriler.map(kat=>{
             const h = hesap[kat];
             const kritik = h.kacGun!=null && h.kacGun < 3;
@@ -1627,6 +1727,8 @@
               <td class="mono">${h.tuketilenM3.toFixed(2)}</td>
               <td class="mono">${h.kalanM3.toFixed(2)}</td>
               <td class="mono">${h.gunlukOrt.toFixed(2)}</td>
+              <td class="mono">${(h.gunlukOrt*7).toFixed(2)}</td>
+              <td class="mono">${(h.gunlukOrt*30).toFixed(2)}</td>
               <td class="mono" style="${kritik?'color:var(--red);font-weight:700;':''}">${h.kacGun!=null?h.kacGun.toFixed(1)+' gün':'—'}</td>
             </tr>`;
           }).join('')}</tbody>
@@ -2204,6 +2306,7 @@
             <div class="form-grid">
               <div class="field full"><label>Kavak Yoğunluğu (kg/m³)</label><input type="number" step="any" min="0" name="kavak_yogunluk_kg_m3" required value="${ayar('kavak_yogunluk_kg_m3',730)}"></div>
               <div class="field full"><label>Soyma Verimi (%)</label><input type="number" step="any" min="0" max="100" name="soyma_verimi_yuzde" required value="${ayar('soyma_verimi_yuzde',55)}"></div>
+              <div class="field full"><label>Hedef Günlük Kontraplak Üretimi (m³)</label><input type="number" step="any" min="0" name="hedef_gunluk_kontraplak_m3" required value="${ayar('hedef_gunluk_kontraplak_m3',30)}"></div>
             </div>
             <div class="form-actions">
               <button type="submit" class="btn primary">Kaydet</button>
@@ -2388,6 +2491,7 @@
       }
     }
     else if(action==='excel-export'){ excelExportData(t.dataset.export); }
+    else if(action==='gunluk-tarih-temizle'){ state.gunlukBaslangic=''; state.gunlukBitis=''; render(); }
     else if(action==='giyotin-ekle'){ state.modal = { type:'giyotin-kaydi', kayit:null }; render(); }
     else if(action==='giyotin-duzenle'){ const r = state.giyotinKesim.find(x=>x.id===t.dataset.id); state.modal = { type:'giyotin-kaydi', kayit:r }; render(); }
     else if(action==='giyotin-sil'){
@@ -2483,6 +2587,12 @@
     }
     if(e.target.matches('[data-action="ozet-ay"]')){
       state.ozetAy = e.target.value; render();
+    }
+    if(e.target.matches('[data-action="gunluk-tarih-baslangic"]')){
+      state.gunlukBaslangic = e.target.value; render();
+    }
+    if(e.target.matches('[data-action="gunluk-tarih-bitis"]')){
+      state.gunlukBitis = e.target.value; render();
     }
     if(e.target.closest('#kantar-kaydi-form')){
       const form = e.target.closest('#kantar-kaydi-form');
@@ -2896,7 +3006,8 @@
       const f = e.target;
       const guncellemeler = [
         { anahtar:'kavak_yogunluk_kg_m3', deger: parseFloat(f.kavak_yogunluk_kg_m3.value) },
-        { anahtar:'soyma_verimi_yuzde', deger: parseFloat(f.soyma_verimi_yuzde.value) }
+        { anahtar:'soyma_verimi_yuzde', deger: parseFloat(f.soyma_verimi_yuzde.value) },
+        { anahtar:'hedef_gunluk_kontraplak_m3', deger: parseFloat(f.hedef_gunluk_kontraplak_m3.value) }
       ];
       let hata = null;
       for(const g of guncellemeler){
