@@ -1299,16 +1299,21 @@
   function tomrukHedefineGoreIhtiyacHesapla(){
     const hedefM3 = ayar('hedef_gunluk_kontraplak_m3', 30);
     const verimYuzde = ayar('soyma_verimi_yuzde', 55);
+    const kavakYogunluk = ayar('kavak_yogunluk_kg_m3', 730);
     // Kontraplak, papel katmanlarının üst üste preslenmesiyle oluşur; hacimce yaklaşık 1:1 kabul edilir.
     const papelGerekliGunluk = hedefM3;
     const tomrukGerekliGunluk = papelGerekliGunluk / (verimYuzde/100);
+    const m3TonaCevir = m3 => m3 * kavakYogunluk / 1000;
     return {
       hedefM3,
       verimYuzde,
       papelGerekliGunluk,
       tomrukGerekliGunluk,
       tomrukGerekliHaftalik: tomrukGerekliGunluk*7,
-      tomrukGerekliAylik: tomrukGerekliGunluk*30
+      tomrukGerekliAylik: tomrukGerekliGunluk*30,
+      tomrukGerekliGunlukTon: m3TonaCevir(tomrukGerekliGunluk),
+      tomrukGerekliHaftalikTon: m3TonaCevir(tomrukGerekliGunluk*7),
+      tomrukGerekliAylikTon: m3TonaCevir(tomrukGerekliGunluk*30)
     };
   }
 
@@ -1702,9 +1707,9 @@
       <h3 style="font-size:14px;margin-bottom:8px;">Hedefe Göre Tomruk İhtiyacı</h3>
       <p class="hint" style="margin-bottom:6px;">Günlük <b>${hedef.hedefM3.toFixed(1)} m³ kontraplak</b> üretim hedefine göre gereken tomruk miktarı ${rol==='admin' ? `<button class="row-btn" data-action="ayarlar-duzenle" style="margin-left:6px;padding:2px 10px;font-size:11px;">Hedefi Değiştir</button>` : ''}</p>
       <div class="summary" style="margin-bottom:20px;">
-        <div class="stat"><div class="num">${hedef.tomrukGerekliGunluk.toFixed(2)}</div><div class="label">Günlük Gereken Tomruk (m³)</div></div>
-        <div class="stat"><div class="num">${hedef.tomrukGerekliHaftalik.toFixed(2)}</div><div class="label">Haftalık Gereken Tomruk (m³)</div></div>
-        <div class="stat"><div class="num">${hedef.tomrukGerekliAylik.toFixed(2)}</div><div class="label">Aylık Gereken Tomruk (m³)</div></div>
+        <div class="stat"><div class="num">${hedef.tomrukGerekliGunluk.toFixed(2)}</div><div class="label">Günlük Gereken Tomruk (m³)</div><div class="hint" style="margin-top:6px;">≈ ${hedef.tomrukGerekliGunlukTon.toFixed(2)} ton</div></div>
+        <div class="stat"><div class="num">${hedef.tomrukGerekliHaftalik.toFixed(2)}</div><div class="label">Haftalık Gereken Tomruk (m³)</div><div class="hint" style="margin-top:6px;">≈ ${hedef.tomrukGerekliHaftalikTon.toFixed(2)} ton</div></div>
+        <div class="stat"><div class="num">${hedef.tomrukGerekliAylik.toFixed(2)}</div><div class="label">Aylık Gereken Tomruk (m³)</div><div class="hint" style="margin-top:6px;">≈ ${hedef.tomrukGerekliAylikTon.toFixed(2)} ton</div></div>
       </div>
 
       ${kategoriler.length===0 ? `<div class="card"><div class="empty"><b>Veri yok</b>Henüz kantar/soyma kaydı yok.</div></div>` : `
