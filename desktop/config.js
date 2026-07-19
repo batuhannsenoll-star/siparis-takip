@@ -12,9 +12,9 @@ window.AKIS_CONFIG = {
   firmaLogo: "icons/akis-logo.png",
 
   // --- Bu firmada hangi modüller aktif? ---
-  // Olası değerler: "satis", "uretim", "tedarik"
-  // Not: "tedarik" modülünün alt sekmeleri (Kantar, Tomruk Sahası, Soyma Çıktısı, Reçeteler)
-  // şu an kontraplak/plywood üretimine özeldir. Farklı sektörden bir firma eklenince
-  // bu alt sekmeler ayrıca gözden geçirilmeli.
-  aktifModuller: ["satis", "uretim", "tedarik"]
+  // Olası değerler: "satis", "uretim", "tedarik" (Satın Alma), "mobilya"
+  // Not: "tedarik" ve "mobilya" modüllerinin sekmeleri şu an Anıl Orman'ın
+  // kontraplak + mobilya üretimine özeldir. Farklı sektörden bir firma eklenince
+  // bu sekmeler ayrıca gözden geçirilmeli.
+  aktifModuller: ["satis", "uretim", "tedarik", "mobilya"]
 };
